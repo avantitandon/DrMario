@@ -22,8 +22,8 @@ ADDR_DSPL:
 main:
     li $t1, 0xff0000        # $t1 = red
     li $t2, 0x00ff00        # $t2 = green
-    li $t3, 0x0000ff 
-    li $t4, 0xffffff        # white
+    li $t3, 0x0000ff 	    # $t3 = blue
+    li $t4, 0xffffff        # $t4 = white
 
     lw $t0, ADDR_DSPL       # $t0 = base address for display
     sw $t4, 24($t0)          # paint the first unit (i.e., top-left) red
