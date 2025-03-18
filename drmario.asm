@@ -36,38 +36,14 @@ ADDR_KBRD:
 	.text
 	.globl main
 
-    # Run the game.
-main:
+   
+main: 
+     li $t4, 0xffffff        # $t4 = white
+    
+    # Draw the bottle
+    jal draw_background
     # Initialize the game
-    li $t1, 0xff0000        # $t1 = red
-    li $t2, 0x00ff00        # $t2 = green
-    li $t3, 0x0000ff        # $t3 = blue
-    li $t4, 0xffffff        # $t4 = white
-    
-    lw $t0, ADDR_DSPL       # $t0 = base address for display
-    
-    add $t5, $zero, $zero # store zero in $t5, initial i
-    addi $t6, $zero, 125 # store 125 in $t6, final i
-    addi $t0, $t0, 384 # update initial position
-    
-    draw_left:
-    sw $t4, 0($t0) # draw white pixel
-    addi $t5, $t5, 1 # increment i
-    addi $t0, $t0, 128 # update position to draw 
-    beq $t5, $t6, stop_drawing_left
-    j draw_left
-    stop_drawing_left:
-    
-    lw $t0, ADDR_DSPL   # reload base address again (0x10008000)
-    addi $t0, $t0, 480  # offset into display memory correctly
-    add $t5, $zero, $zero # store zero in $t5, initial i
-    draw_right:
-    sw $t4, 0($t0) # draw white pixel
-    addi $t5, $t5, 1 # increment i
-    addi $t0, $t0, 128 # update position to draw 
-    beq $t5, $t6, stop_drawing_right
-    j draw_right
-    stop_drawing_right:
+
 
 game_loop:
     # 1a. Check if key has been pressed
@@ -79,3 +55,98 @@ game_loop:
 
     # 5. Go back to Step 1
     j game_loop
+
+draw_background:
+    # return addresses and reinitialsatoon 
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    li $t4, 0xffffff        # $t4 = white 
+    lw $t0, ADDR_DSPL       
+    
+    # left wall init
+    add $t5, $zero, $zero   # $loop variable
+    addi $t6, $zero, 24     # $heigh
+    addi $t8, $t0, 780      # row 6, col 3
+    
+    draw_left_wall:
+        sw $t4, 0($t8) 
+        addi $t5, $t5, 1    # Increment counter
+        addi $t8, $t8, 128  
+        blt $t5, $t6, draw_left_wall
+        
+    #Draw the bottom
+    add $t5, $zero, $zero
+    addi $t6, $zero, 26
+    addi $t8, $t0, 3852
+    
+    draw_bottom_hehe:
+        sw $t4, 0($t8)
+        addi $t5, $t5, 1    # Increment counter
+        addi $t8, $t8, 4  
+        blt $t5, $t6, draw_bottom_hehe
+    
+    
+    
+    # Draw right wall (from top to bottom)
+    add $t5, $zero, $zero   # Reset 
+    addi $t6, $zero, 24    # $ height
+    addi $t8, $t0, 880     # row 6 col 28
+    
+
+    
+    draw_right_wall:
+        sw $t4, 0($t8)      # Draw white pixel at $t8
+        addi $t5, $t5, 1    # Increment counter
+        addi $t8, $t8, 128  # Move down one row
+        blt $t5, $t6, draw_right_wall
+        
+    
+    #draw first half of top
+    add $t5, $zero, $zero   # Reset 
+    addi $t6, $zero, 10
+    addi $t8, $t0, 652 #row 5 col 3
+
+    draw_top_h1:
+        sw $t4, 0($t8)      
+        addi $t5, $t5, 1    
+        addi $t8, $t8, 4  
+        blt $t5, $t6, draw_top_h1
+    
+    add $t5, $zero, $zero   # Reset 
+    addi $t6, $zero, 10
+    addi $t8, $t0, 716 #row 5 col 17
+    
+    draw_top_h2:
+        sw $t4, 0($t8)      
+        addi $t5, $t5, 1    
+        addi $t8, $t8, 4  
+        blt $t5, $t6, draw_top_h2
+        
+    # draw top part of the bottle
+    
+    add $t5, $zero, $zero   # Reset 
+    addi $t6, $zero, 4
+    addi $t8, $t0, 308
+    
+    draw_top_h3:
+        sw $t4, 0($t8)      
+        addi $t5, $t5, 1    
+        addi $t8, $t8, 128  
+        blt $t5, $t6, draw_top_h3
+    
+    add $t5, $zero, $zero   # Reset 
+    addi $t6, $zero, 4
+    addi $t8, $t0, 328
+    
+    draw_top_h4:
+        sw $t4, 0($t8)      
+        addi $t5, $t5, 1    
+        addi $t8, $t8, 128  
+        blt $t5, $t6, draw_top_h4
+    
+    
+    # Return
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
