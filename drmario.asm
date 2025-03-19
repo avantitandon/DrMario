@@ -66,19 +66,19 @@ draw_background:
     
     # left wall init
     add $t5, $zero, $zero   # $loop variable
-    addi $t6, $zero, 24     # $heigh
-    addi $t8, $t0, 780      # row 6, col 3
+    addi $t6, $zero, 34     # $heigh
+    addi $t8, $t0, 1548      # row 6, col 3
     
     draw_left_wall:
         sw $t4, 0($t8) 
         addi $t5, $t5, 1    # Increment counter
-        addi $t8, $t8, 128  
+        addi $t8, $t8, 256  
         blt $t5, $t6, draw_left_wall
         
     #Draw the bottom
     add $t5, $zero, $zero
     addi $t6, $zero, 26
-    addi $t8, $t0, 3852
+    addi $t8, $t0,  10252
     
     draw_bottom_hehe:
         sw $t4, 0($t8)
@@ -90,22 +90,22 @@ draw_background:
     
     # Draw right wall (from top to bottom)
     add $t5, $zero, $zero   # Reset 
-    addi $t6, $zero, 24    # $ height
-    addi $t8, $t0, 880     # row 6 col 28
+    addi $t6, $zero, 34   # $ height
+    addi $t8, $t0, 1648     # row 6 col 28
     
 
     
     draw_right_wall:
         sw $t4, 0($t8)      # Draw white pixel at $t8
         addi $t5, $t5, 1    # Increment counter
-        addi $t8, $t8, 128  # Move down one row
+        addi $t8, $t8, 256  # Move down one row
         blt $t5, $t6, draw_right_wall
         
     
     #draw first half of top
     add $t5, $zero, $zero   # Reset 
     addi $t6, $zero, 10
-    addi $t8, $t0, 652 #row 5 col 3
+    addi $t8, $t0, 1548  #row 5 col 3
 
     draw_top_h1:
         sw $t4, 0($t8)      
@@ -115,34 +115,34 @@ draw_background:
     
     add $t5, $zero, $zero   # Reset 
     addi $t6, $zero, 10
-    addi $t8, $t0, 716 #row 5 col 17
+    addi $t8, $t0, 1648   #row 5 col 17
     
     draw_top_h2:
         sw $t4, 0($t8)      
         addi $t5, $t5, 1    
-        addi $t8, $t8, 4  
+        addi $t8, $t8, -4  
         blt $t5, $t6, draw_top_h2
         
     # draw top part of the bottle
     
     add $t5, $zero, $zero   # Reset 
     addi $t6, $zero, 4
-    addi $t8, $t0, 308
+    addi $t8, $t0, 820 
     
     draw_top_h3:
         sw $t4, 0($t8)      
         addi $t5, $t5, 1    
-        addi $t8, $t8, 128  
+        addi $t8, $t8, 256  
         blt $t5, $t6, draw_top_h3
     
     add $t5, $zero, $zero   # Reset 
     addi $t6, $zero, 4
-    addi $t8, $t0, 328
+    addi $t8, $t0, 840
     
     draw_top_h4:
         sw $t4, 0($t8)      
         addi $t5, $t5, 1    
-        addi $t8, $t8, 128  
+        addi $t8, $t8, 256  
         blt $t5, $t6, draw_top_h4
     
     
