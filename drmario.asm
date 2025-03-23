@@ -85,29 +85,225 @@ game_loop:
     
 keyboard_input:                     # A key is pressed
     lw $a0, 4($t0)                  # Load second word from keyboard
-    beq $a0, 0x77, check_orientation
-    beq $a0, 0x71, respond_to_Q     # Check if the key q was pressed
+    beq $a0, 0x77, check_orientation_w
+    beq $a0, 0x61, check_orientation_a
+    beq $a0, 0x64, check_orientation_d
+    beq $a0, 0x71, respond_to_Q 
+    beq $a0, 0x73, check_orientation_s# Check if the key q was pressed
+    
 
     li $v0, 1                       # ask system to print $a0
     syscall
 
     b game_loop
-    
 respond_to_Q:
 	li $v0, 10                      # Quit gracefully
 	syscall
+	
+check_orientation_w:
+    jal check_orientation     # Call helper function to determine orientation
+    beq $v0, 1, respond_to_w  # If horizontal, branch to appropriate handler
+    beq $v0, 2, respond_to_w_2 # If vertical, branch to appropriate handler
+    j game_loop               # If neither, return to game loop
 
-check_orientation: #come here
+check_orientation_a:
+    jal check_orientation     # Call helper function to determine orientation
+    beq $v0, 1, respond_to_a_hor # If horizontal, branch to appropriate handler
+    beq $v0, 2, respond_to_a_vert # If vertical, branch to appropriate handler
+    j game_loop               # If neither, return to game loop
+    
+check_orientation_s:
+    jal check_orientation           # Call helper function to determine orientation
+    beq $v0, 1, respond_to_s_hor    # If horizontal, branch to appropriate handler
+    beq $v0, 2, respond_to_s_vert   # If vertical, branch to appropriate handler
+    j game_loop                     # If neither, return to game loop
+
+
+check_orientation_d:
+    jal check_orientation           # Call helper function to determine orientation
+    beq $v0, 1, respond_to_d_hor    # If horizontal, branch to appropriate handler
+    beq $v0, 2, respond_to_d_vert   # If vertical, branch to appropriate handler
+    j game_loop                     # If neither, return to game loop
+
+
+# Orientation helper function
+# Returns in $v0: 1 for horizontal, 2 for vertical, 0 for unknown
+check_orientation:
+    lw $t0, ADDR_DSPL         # get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    sub $t5, $t2, $t1         # calculate offset difference
+    
+    # Check for horizontal orientation (difference of 4)
+    li $v0, 0                 # Default return value (unknown)
+    li $t6, 4
+    beq $t5, $t6, horizontal_orientation
+    
+    # Check for vertical orientation (difference of 256)
+    li $t6, 256
+    beq $t5, $t6, vertical_orientation
+    jr $ra                    # Return with $v0 = 0 (unknown orientation)
+    
+horizontal_orientation:
+    li $v0, 1                 # Set return value to 1 (horizontal)
+    jr $ra                    # Return to caller
+    
+vertical_orientation:
+    li $v0, 2                 # Set return value to 2 (vertical)
+    jr $ra                    # Return to caller
+
+	
+    
+respond_to_s_vert:
     lw $t0, ADDR_DSPL #get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    sub $t5, $t2, $t1
-    beq $t5, 4, respond_to_w
-    beq $t5, 256, respond_to_w_2
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0 
+    
+    addi $t5, $t1, 256  # get offset of the right pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, 256  # get offset of the left pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    sw $t7, 0($t3)
+    addi $t2, $t2, 256
+    addi $t1, $t1, 256
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
     j game_loop
     
+respond_to_s_hor:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0 
+    
+    addi $t5, $t1, 256  # get offset of the right pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, 256  # get offset of the left pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    sw $t7, 0($t3) #code for horizontal
+    sw $t7, 0($t4)
 
-	
+    addi $t2, $t2, 256
+    addi $t1, $t1, 256
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    j game_loop
+    
+    
+respond_to_a_vert:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0 
+    
+    addi $t5, $t1, -4  # get offset of the right pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, -4  # get offset of the left pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    sw $t7, 0($t3)
+    sw $t7, 0($t4)# code for vertical
+    addi $t2, $t2, -4
+    addi $t1, $t1, -4
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    j game_loop
+
+respond_to_a_hor:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0 
+    sw $t7, 0($t4)
+    
+    addi $t5, $t1, -4  # get offset of the right pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, -4  # get offset of the left pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    
+    addi $t2, $t2, -4
+    addi $t1, $t1, -4
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    j game_loop
+    
+respond_to_d_hor:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0
+    sw $t7, 0($t3)
+    
+    addi $t5, $t1, 4  # get offset of the left pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, 4  # get offset of the right pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    addi $t2, $t2, 4
+    addi $t1, $t1, 4
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    
+    j game_loop
+
+respond_to_d_vert:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0
+    sw $t7, 0($t3)
+    sw $t7, 0($t4)
+    
+    addi $t5, $t1, 4  # get offset of the left pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, 4  # get offset of the right pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    addi $t2, $t2, 4
+    addi $t1, $t1, 4
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    
+    j game_loop
+    
+   
+    
+    
+
 respond_to_w:
     lw $t0, ADDR_DSPL #get address display again
     lw $t1, pill_left_offset
@@ -139,25 +335,22 @@ respond_to_w_2: # some of the register copying is unnecessary but it's because I
     lw $s0, 0($t3)
     lw $s1, 0($t4)
     
-    addi $t5, $t1, 4    # get offset of the right pixel
+    addi $t5, $t1, 4  # get offset of the right pixel
     add $t5, $t5, $t0 # Add base address to get memory address
 
-    sw $s1, 0($t5)
+    sw $s0, 0($t5) # fornerky s1
     li $t6, 0            # Load black color (0) into $t6
     sw $t6, 0($t4)
     
-    addi $t1, $t1, 0       # Update left pill offset 
-    sw $t1, pill_left_offset  # Save back to memory
+    sw $s1, 0($t3)
+    
     addi $t2, $t2, -252        # Update right pill offset
     sw $t2, pill_right_offset # Save back to memory
     j game_loop
 
     
     
-    
-    
-    
-    
+
     
 # thought first store the colors we have in the pill 
 # black the right one, color the one below the left one the same color
