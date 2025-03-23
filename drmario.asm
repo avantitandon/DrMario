@@ -33,8 +33,11 @@ ADDR_BOARD:
 # Mutable Data
 ##############################################################################
 # The game board, 33  rows * 24 cols * 4 bytes per slot 
-# BOARD_GRID: 
+BOARD_GRID: 
 #     .space 3168
+    pill_left_offset:  .word 1084    # Starting memory offset for left pill
+    pill_right_offset: .word 1088  # Starting memory offset for right pill
+    pill_orientation: .word 0 # 0 is horizontal 1 is vertical
 
 ##############################################################################
 # Code
@@ -43,7 +46,8 @@ ADDR_BOARD:
 	.globl main
 
    
-main:     
+main:
+
     # Initialize the board
     jal init_board
     # Draw the bottle
@@ -55,7 +59,20 @@ main:
     # Initialize the game
 
 game_loop:
+
     # 1a. Check if key has been pressed
+    li $v0, 32 # system call for sleeping
+    li $a0, 1 # sleep time is one second
+    syscall
+    
+    lw $t0, ADDR_KBRD #initialise keyboard to t0
+    lw $t9, 0($t0) # load the input in the keyboard in rt9
+    beq $t9, 1, keyboard_input
+    
+    # b game_loop
+    
+    
+    
     # 1b. Check which key has been pressed
     # 2a. Check for collisions
 	# 2b. Update locations (capsules)
@@ -65,6 +82,281 @@ game_loop:
     # 5. Go back to Step 1
     j game_loop
 
+    
+keyboard_input:                     # A key is pressed
+    lw $a0, 4($t0)                  # Load second word from keyboard
+    beq $a0, 0x77, check_orientation_w
+    beq $a0, 0x61, check_orientation_a
+    beq $a0, 0x64, check_orientation_d
+    beq $a0, 0x71, respond_to_Q 
+    beq $a0, 0x73, check_orientation_s# Check if the key q was pressed
+    
+
+    li $v0, 1                       # ask system to print $a0
+    syscall
+
+    b game_loop
+respond_to_Q:
+	li $v0, 10                      # Quit gracefully
+	syscall
+	
+check_orientation_w:
+    jal check_orientation     # Call helper function to determine orientation
+    beq $v0, 1, respond_to_w  # If horizontal, branch to appropriate handler
+    beq $v0, 2, respond_to_w_2 # If vertical, branch to appropriate handler
+    j game_loop               # If neither, return to game loop
+
+check_orientation_a:
+    jal check_orientation     # Call helper function to determine orientation
+    beq $v0, 1, respond_to_a_hor # If horizontal, branch to appropriate handler
+    beq $v0, 2, respond_to_a_vert # If vertical, branch to appropriate handler
+    j game_loop               # If neither, return to game loop
+    
+check_orientation_s:
+    jal check_orientation           # Call helper function to determine orientation
+    beq $v0, 1, respond_to_s_hor    # If horizontal, branch to appropriate handler
+    beq $v0, 2, respond_to_s_vert   # If vertical, branch to appropriate handler
+    j game_loop                     # If neither, return to game loop
+
+
+check_orientation_d:
+    jal check_orientation           # Call helper function to determine orientation
+    beq $v0, 1, respond_to_d_hor    # If horizontal, branch to appropriate handler
+    beq $v0, 2, respond_to_d_vert   # If vertical, branch to appropriate handler
+    j game_loop                     # If neither, return to game loop
+
+
+# Orientation helper function
+# Returns in $v0: 1 for horizontal, 2 for vertical, 0 for unknown
+check_orientation:
+    lw $t0, ADDR_DSPL         # get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    sub $t5, $t2, $t1         # calculate offset difference
+    
+    # Check for horizontal orientation (difference of 4)
+    li $v0, 0                 # Default return value (unknown)
+    li $t6, 4
+    beq $t5, $t6, horizontal_orientation
+    
+    # Check for vertical orientation (difference of 256)
+    li $t6, 256
+    beq $t5, $t6, vertical_orientation
+    jr $ra                    # Return with $v0 = 0 (unknown orientation)
+    
+horizontal_orientation:
+    li $v0, 1                 # Set return value to 1 (horizontal)
+    jr $ra                    # Return to caller
+    
+vertical_orientation:
+    li $v0, 2                 # Set return value to 2 (vertical)
+    jr $ra                    # Return to caller
+
+	
+    
+respond_to_s_vert:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0 
+    
+    addi $t5, $t1, 256  # get offset of the right pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, 256  # get offset of the left pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    sw $t7, 0($t3)
+    addi $t2, $t2, 256
+    addi $t1, $t1, 256
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    j game_loop
+    
+respond_to_s_hor:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0 
+    
+    addi $t5, $t1, 256  # get offset of the right pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, 256  # get offset of the left pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    sw $t7, 0($t3) #code for horizontal
+    sw $t7, 0($t4)
+
+    addi $t2, $t2, 256
+    addi $t1, $t1, 256
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    j game_loop
+    
+    
+respond_to_a_vert:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0 
+    
+    addi $t5, $t1, -4  # get offset of the right pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, -4  # get offset of the left pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    sw $t7, 0($t3)
+    sw $t7, 0($t4)# code for vertical
+    addi $t2, $t2, -4
+    addi $t1, $t1, -4
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    j game_loop
+
+respond_to_a_hor:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0 
+    sw $t7, 0($t4)
+    
+    addi $t5, $t1, -4  # get offset of the right pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, -4  # get offset of the left pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    
+    addi $t2, $t2, -4
+    addi $t1, $t1, -4
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    j game_loop
+    
+respond_to_d_hor:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0
+    sw $t7, 0($t3)
+    
+    addi $t5, $t1, 4  # get offset of the left pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, 4  # get offset of the right pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    addi $t2, $t2, 4
+    addi $t1, $t1, 4
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    
+    j game_loop
+
+respond_to_d_vert:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    li $t7, 0
+    sw $t7, 0($t3)
+    sw $t7, 0($t4)
+    
+    addi $t5, $t1, 4  # get offset of the left pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, 4  # get offset of the right pixel
+    add $t6, $t6, $t0
+    sw $s0, 0($t5)
+    sw $s1, 0($t6)
+    addi $t2, $t2, 4
+    addi $t1, $t1, 4
+    sw $t1, pill_left_offset
+    sw $t2, pill_right_offset
+    
+    j game_loop
+    
+   
+    
+    
+
+respond_to_w:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    
+    addi $t5, $t1, 256        # Add 256 to get offset of pixel one row below
+    add $t5, $t5, $t0 # Add base address to get memory address
+
+    sw $s1, 0($t5)
+    li $t6, 0            # Load black color (0) into $t6
+    sw $t6, 0($t4)
+    addi $t2, $t2, 252        # Update right pill offset
+    sw $t2, pill_right_offset # Save back to memory
+    j game_loop
+    
+    
+respond_to_w_2: # some of the register copying is unnecessary but it's because I copy pasted and i'm lazy as hell
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills address
+    
+    lw $s0, 0($t3)
+    lw $s1, 0($t4)
+    
+    addi $t5, $t1, 4  # get offset of the right pixel
+    add $t5, $t5, $t0 # Add base address to get memory address
+
+    sw $s0, 0($t5) # fornerky s1
+    li $t6, 0            # Load black color (0) into $t6
+    sw $t6, 0($t4)
+    
+    sw $s1, 0($t3)
+    
+    addi $t2, $t2, -252        # Update right pill offset
+    sw $t2, pill_right_offset # Save back to memory
+    j game_loop
+
+    
+    
+
+    
+# thought first store the colors we have in the pill 
+# black the right one, color the one below the left one the same color
+
+
+
 init_board: # Initializes 33x24 board to empty (type = 0, color = black)
     lw $t0, ADDR_BOARD # t0 stores board address
     li $t1, 0          # row = 0
@@ -72,7 +364,7 @@ init_board: # Initializes 33x24 board to empty (type = 0, color = black)
     li $t2, 0          # col = 0
     init_board_col_loop:
     # calculate offset (row * 24 + col) * 4
-    mul $t3, $t1, 24   # t3 = row * 24
+    mul $t3, $t1, 24  # t3 = row * 24
     add $t3, $t3, $t2  # t3 = row * 24 + col
     mul $t3, $t3, 4    # t3 = offset in bytes
     
