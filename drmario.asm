@@ -487,6 +487,7 @@ generate_draw_viruses: #TODO: debug, viruses are everywhere
     li $a0, 0 # stores return value
     li $a1, 24 # gets random number between 0 and 23
     syscall
+    addi $a0, $a0, 1 # changes random number to a col between 1 and 24
     move $t8, $a0 # put result in $t8
     #calculate memory offset
     mul $t6, $t9, 24      # t6 = row * 24
