@@ -44,9 +44,9 @@ BOARD_GRID:
 	.text
 	.globl main
 
+#TODO: store the pill as a block (type 2) once a collision is detected
    
 main:
-
     # Initialize the board
     jal init_board
     # Draw the bottle
@@ -58,7 +58,6 @@ main:
     # Initialize the game
 
 game_loop:
-
     # 1a. Check if key has been pressed
     li $v0, 32 # system call for sleeping
     li $a0, 17 # sleep time is 17 milliseconds
@@ -69,8 +68,6 @@ game_loop:
     beq $t9, 1, keyboard_input
     
     # b game_loop
-    
-    
     
     # 1b. Check which key has been pressed
     # 2a. Check for collisions
@@ -90,11 +87,11 @@ keyboard_input:                     # A key is pressed
     beq $a0, 0x71, respond_to_Q 
     beq $a0, 0x73, check_orientation_s# Check if the key q was pressed
     
-
     li $v0, 1                       # ask system to print $a0
     syscall
 
     b game_loop
+    
 respond_to_Q:
 	li $v0, 10                      # Quit gracefully
 	syscall
@@ -117,13 +114,11 @@ check_orientation_s:
     beq $v0, 2, respond_to_s_vert   # If vertical, branch to appropriate handler
     j game_loop                     # If neither, return to game loop
 
-
 check_orientation_d:
     jal check_orientation           # Call helper function to determine orientation
     beq $v0, 1, respond_to_d_hor    # If horizontal, branch to appropriate handler
     beq $v0, 2, respond_to_d_vert   # If vertical, branch to appropriate handler
     j game_loop                     # If neither, return to game loop
-
 
 # Orientation helper function
 # Returns in $v0: 1 for horizontal, 2 for vertical, 0 for unknown
@@ -134,14 +129,14 @@ check_orientation:
     sub $t5, $t2, $t1         # calculate offset difference
     
     # Check for horizontal orientation (difference of 4)
-    li $v0, 0                 # Default return value (unknown)
+#    li $v0, 0                 # return 0 if unknown orientation
     li $t6, 4
     beq $t5, $t6, horizontal_orientation
     
     # Check for vertical orientation (difference of 256)
     li $t6, 256
     beq $t5, $t6, vertical_orientation
-    jr $ra                    # Return with $v0 = 0 (unknown orientation)
+#    jr $ra                    # Return with $v0 = 0 (unknown orientation)
     
 horizontal_orientation:
     li $v0, 1                 # Set return value to 1 (horizontal)
@@ -151,8 +146,6 @@ vertical_orientation:
     li $v0, 2                 # Set return value to 2 (vertical)
     jr $ra                    # Return to caller
 
-	
-    
 respond_to_s_vert:
     lw $t0, ADDR_DSPL #get address display again
     lw $t1, pill_left_offset
@@ -163,10 +156,16 @@ respond_to_s_vert:
     lw $s1, 0($t4)
     li $t7, 0 
     
-    addi $t5, $t1, 256  # get offset of the right pixel
+    addi $t5, $t1, 256  # get offset of the left pixel
     add $t5, $t5, $t0 # Add base address to get memory address
-    addi $t6, $t2, 256  # get offset of the left pixel
+    addi $t6, $t2, 256  # get offset of the right pixel
     add $t6, $t6, $t0
+    
+    # check for bottom wall collision
+    lw $t9, 0($t6)             # load the pixel color under the pill
+    li $s3, 0xffffff        
+    beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    
     sw $s0, 0($t5)
     sw $s1, 0($t6)
     sw $t7, 0($t3)
@@ -190,6 +189,12 @@ respond_to_s_hor:
     add $t5, $t5, $t0 # Add base address to get memory address
     addi $t6, $t2, 256  # get offset of the left pixel
     add $t6, $t6, $t0
+    
+    # check for bottom wall collision
+    lw $t9, 0($t6)             # load the pixel color under the pill
+    li $s3, 0xffffff        
+    beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    
     sw $s0, 0($t5)
     sw $s1, 0($t6)
     sw $t7, 0($t3) #code for horizontal
@@ -219,7 +224,7 @@ respond_to_a_vert:
     # check for wall collision
     lw $t9, 0($t5)             # load the pixel color to the left of pill
     li $s3, 0xffffff        
-    beq $t9, $s3, skip_left_move  # if new cell is white, skip moving
+    beq $t9, $s3, skip_move  # if new cell is white, skip moving
     
     sw $s0, 0($t5)
     sw $s1, 0($t6)
@@ -249,7 +254,7 @@ respond_to_a_hor:
     # check for left wall collision
     lw $t9, 0($t5)             # load the pixel color to the left of pill
     li $s3, 0xffffff        
-    beq $t9, $s3, skip_left_move  # if new cell is white, skip moving
+    beq $t9, $s3, skip_move  # if new cell is white, skip moving
     
     li $t7, 0 
     sw $t7, 0($t4)
@@ -262,7 +267,7 @@ respond_to_a_hor:
     sw $t2, pill_right_offset
     j game_loop
     
-    skip_left_move:
+    skip_move:
     j game_loop
     
 respond_to_d_hor:
@@ -282,7 +287,7 @@ respond_to_d_hor:
     # check for right wall collision
     lw $t9, 0($t6)             # load the pixel color to the right of pill
     li $s3, 0xffffff        
-    beq $t9, $s3, skip_right_move  # if new cell is white, skip moving
+    beq $t9, $s3, skip_move  # if new cell is white, skip moving
     
     li $t7, 0
     sw $t7, 0($t3)
@@ -293,9 +298,6 @@ respond_to_d_hor:
     sw $t1, pill_left_offset
     sw $t2, pill_right_offset
     
-    j game_loop
-    
-    skip_right_move:
     j game_loop
 
 respond_to_d_vert:
@@ -315,7 +317,7 @@ respond_to_d_vert:
     # check for right wall collision
     lw $t9, 0($t5)             # load the pixel color to the right of pill
     li $s3, 0xffffff        
-    beq $t9, $s3, skip_right_move  # if new cell is white, skip moving
+    beq $t9, $s3, skip_move  # if new cell is white, skip moving
     
     li $t7, 0
     sw $t7, 0($t3)
@@ -372,14 +374,6 @@ respond_to_w_2:
     addi $t2, $t2, -252        # Update right pill offset
     sw $t2, pill_right_offset # Save back to memory
     j game_loop
-
-    
-    
-
-    
-# thought first store the colors we have in the pill 
-# black the right one, color the one below the left one the same color
-
 
 
 init_board: # Initializes 33x24 board to empty (type = 0, color = black)
