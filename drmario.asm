@@ -37,7 +37,6 @@ BOARD_GRID:
 #     .space 3168
     pill_left_offset:  .word 1084    # Starting memory offset for left pill
     pill_right_offset: .word 1088  # Starting memory offset for right pill
-    pill_orientation: .word 0 # 0 is horizontal 1 is vertical
 
 ##############################################################################
 # Code
@@ -62,7 +61,7 @@ game_loop:
 
     # 1a. Check if key has been pressed
     li $v0, 32 # system call for sleeping
-    li $a0, 1 # sleep time is one second
+    li $a0, 17 # sleep time is 17 milliseconds
     syscall
     
     lw $t0, ADDR_KBRD #initialise keyboard to t0
@@ -211,14 +210,20 @@ respond_to_a_vert:
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
-    li $t7, 0 
     
-    addi $t5, $t1, -4  # get offset of the right pixel
+    addi $t5, $t1, -4  # get offset of the left pixel
     add $t5, $t5, $t0 # Add base address to get memory address
-    addi $t6, $t2, -4  # get offset of the left pixel
+    addi $t6, $t2, -4  # get offset of the right pixel
     add $t6, $t6, $t0
+    
+    # check for wall collision
+    lw $t9, 0($t5)             # load the pixel color to the left of pill
+    li $s3, 0xffffff        
+    beq $t9, $s3, skip_left_move  # if new cell is white, skip moving
+    
     sw $s0, 0($t5)
     sw $s1, 0($t6)
+    li $t7, 0 
     sw $t7, 0($t3)
     sw $t7, 0($t4)# code for vertical
     addi $t2, $t2, -4
@@ -233,15 +238,21 @@ respond_to_a_hor:
     lw $t2, pill_right_offset
     add $t3, $t1, $t0 #gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
-    lw $s0, 0($t3)
+    lw $s0, 0($t3) # save current pill info
     lw $s1, 0($t4)
+    
+    addi $t5, $t1, -4  # get offset of the left pixel    
+    add $t5, $t5, $t0 # Add base address to get memory address
+    addi $t6, $t2, -4  # get offset of the right pixel
+    add $t6, $t6, $t0
+    
+    # check for left wall collision
+    lw $t9, 0($t5)             # load the pixel color to the left of pill
+    li $s3, 0xffffff        
+    beq $t9, $s3, skip_left_move  # if new cell is white, skip moving
+    
     li $t7, 0 
     sw $t7, 0($t4)
-    
-    addi $t5, $t1, -4  # get offset of the right pixel
-    add $t5, $t5, $t0 # Add base address to get memory address
-    addi $t6, $t2, -4  # get offset of the left pixel
-    add $t6, $t6, $t0
     sw $s0, 0($t5)
     sw $s1, 0($t6)
     
@@ -249,6 +260,9 @@ respond_to_a_hor:
     addi $t1, $t1, -4
     sw $t1, pill_left_offset
     sw $t2, pill_right_offset
+    j game_loop
+    
+    skip_left_move:
     j game_loop
     
 respond_to_d_hor:
@@ -259,13 +273,19 @@ respond_to_d_hor:
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
-    li $t7, 0
-    sw $t7, 0($t3)
     
     addi $t5, $t1, 4  # get offset of the left pixel
     add $t5, $t5, $t0 # Add base address to get memory address
     addi $t6, $t2, 4  # get offset of the right pixel
     add $t6, $t6, $t0
+    
+    # check for right wall collision
+    lw $t9, 0($t6)             # load the pixel color to the right of pill
+    li $s3, 0xffffff        
+    beq $t9, $s3, skip_right_move  # if new cell is white, skip moving
+    
+    li $t7, 0
+    sw $t7, 0($t3)
     sw $s0, 0($t5)
     sw $s1, 0($t6)
     addi $t2, $t2, 4
@@ -273,6 +293,9 @@ respond_to_d_hor:
     sw $t1, pill_left_offset
     sw $t2, pill_right_offset
     
+    j game_loop
+    
+    skip_right_move:
     j game_loop
 
 respond_to_d_vert:
@@ -283,14 +306,20 @@ respond_to_d_vert:
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
-    li $t7, 0
-    sw $t7, 0($t3)
-    sw $t7, 0($t4)
     
     addi $t5, $t1, 4  # get offset of the left pixel
     add $t5, $t5, $t0 # Add base address to get memory address
     addi $t6, $t2, 4  # get offset of the right pixel
     add $t6, $t6, $t0
+    
+    # check for right wall collision
+    lw $t9, 0($t5)             # load the pixel color to the right of pill
+    li $s3, 0xffffff        
+    beq $t9, $s3, skip_right_move  # if new cell is white, skip moving
+    
+    li $t7, 0
+    sw $t7, 0($t3)
+    sw $t7, 0($t4)
     sw $s0, 0($t5)
     sw $s1, 0($t6)
     addi $t2, $t2, 4
@@ -299,10 +328,6 @@ respond_to_d_vert:
     sw $t2, pill_right_offset
     
     j game_loop
-    
-   
-    
-    
 
 respond_to_w:
     lw $t0, ADDR_DSPL #get address display again
@@ -325,7 +350,7 @@ respond_to_w:
     j game_loop
     
     
-respond_to_w_2: # some of the register copying is unnecessary but it's because I copy pasted and i'm lazy as hell
+respond_to_w_2:
     lw $t0, ADDR_DSPL #get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
@@ -470,7 +495,7 @@ draw_bottle:
     addi $sp, $sp, 4
     jr $ra
 
-generate_draw_viruses: #TODO: debug, viruses are everywhere
+generate_draw_viruses:
     addiu $sp, $sp, -4  
     sw $ra, 0($sp)      
     li $t5, 0             #  counter for number of viruses
