@@ -580,7 +580,7 @@ paint_black_loop:
     addi $t0, $t0, 4        # Move to next pixel
     bne $t0, $t1, paint_black_loop  # Loop until all pixels are black
     jr $ra                  # Return from function
-
+    
 init_board: # Initializes 33x24 board to empty (type = 0, color = black)
     lw $t0, ADDR_BOARD # t0 stores board address
     li $t1, 0          # row = 0
@@ -820,12 +820,11 @@ draw_pill:
 
 
 check_7_spots:
-    # lw $t0, ADDR_DSPL #get address display again
-    # lw $t1, pill_left_offset
-    # lw $t2, pill_right_offset
-    # add $t3, $t1, $t0 #gets left pills addresss
-    # add $t4, $t2, $t0 # gets right pills addres
-   
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills addres
 
 
 
