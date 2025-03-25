@@ -63,13 +63,11 @@ game_loop:
     li $a0, 17 # sleep time is 17 milliseconds
     syscall
     
+    # 1b. Check which key has been pressed
     lw $t0, ADDR_KBRD #initialise keyboard to t0
     lw $t9, 0($t0) # load the input in the keyboard in rt9
     beq $t9, 1, keyboard_input
     
-    # b game_loop
-    
-    # 1b. Check which key has been pressed
     # 2a. Check for collisions
 	# 2b. Update locations (capsules)
 	# 3. Draw the screen
@@ -78,14 +76,13 @@ game_loop:
     # 5. Go back to Step 1
     j game_loop
 
-    
 keyboard_input:                     # A key is pressed
     lw $a0, 4($t0)                  # Load second word from keyboard
     beq $a0, 0x77, check_orientation_w
     beq $a0, 0x61, check_orientation_a
     beq $a0, 0x64, check_orientation_d
     beq $a0, 0x71, respond_to_Q 
-    beq $a0, 0x73, check_orientation_s# Check if the key q was pressed
+    beq $a0, 0x73, check_orientation_s # Check if the key q was pressed
     
     li $v0, 1                       # ask system to print $a0
     syscall
@@ -147,10 +144,10 @@ vertical_orientation:
     jr $ra                    # Return to caller
 
 respond_to_s_vert:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
@@ -176,10 +173,10 @@ respond_to_s_vert:
     j game_loop
     
 respond_to_s_hor:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
@@ -237,7 +234,7 @@ respond_to_a_vert:
     sw $s1, 0($t6)
     li $t7, 0 
     sw $t7, 0($t3)
-    sw $t7, 0($t4)# code for vertical
+    sw $t7, 0($t4) # code for vertical
     addi $t2, $t2, -4
     addi $t1, $t1, -4
     sw $t1, pill_left_offset
@@ -248,7 +245,7 @@ respond_to_a_hor:
     lw $t0, ADDR_DSPL #get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3) # save current pill info
     lw $s1, 0($t4)
@@ -284,10 +281,10 @@ respond_to_a_hor:
     jal draw_pill
     
 respond_to_d_hor:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
@@ -316,10 +313,10 @@ respond_to_d_hor:
     j game_loop
 
 respond_to_d_vert:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
@@ -351,10 +348,10 @@ respond_to_d_vert:
     j game_loop
 
 respond_to_w:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     
     lw $s0, 0($t3)
@@ -383,7 +380,7 @@ respond_to_w_2:
     addi $t5, $t1, 4  # get offset of the right pixel
     add $t5, $t5, $t0 # Add base address to get memory address
 
-    sw $s0, 0($t5) # fornerky s1
+    sw $s0, 0($t5) 
     li $t6, 0            # Load black color (0) into $t6
     sw $t6, 0($t4)
     
@@ -427,8 +424,8 @@ draw_bottle:
     lw $t0, ADDR_DSPL       
     
     # left wall init
-    add $t5, $zero, $zero   # $loop variable
-    addi $t6, $zero, 34     # $heigh
+    add $t5, $zero, $zero   # loop variable
+    addi $t6, $zero, 34     # height
     addi $t8, $t0, 1548      # row 6, col 3
     
     draw_left_wall:
@@ -450,7 +447,7 @@ draw_bottle:
         
     # Draw right wall (from top to bottom)
     add $t5, $zero, $zero   # Reset 
-    addi $t6, $zero, 34   # $ height
+    addi $t6, $zero, 34     # height
     addi $t8, $t0, 1648     # row 6 col 28
     
     draw_right_wall:
@@ -462,7 +459,7 @@ draw_bottle:
     # draw left half of top of bottle
     add $t5, $zero, $zero   # Reset 
     addi $t6, $zero, 10
-    addi $t8, $t0, 1548  #row 5 col 3
+    addi $t8, $t0, 1548  # row 5 col 3
 
     draw_top_h1:
         sw $t4, 0($t8)      
