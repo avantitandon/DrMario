@@ -34,7 +34,6 @@ ADDR_BOARD:
 ##############################################################################
 # The game board, 33  rows * 24 cols * 4 bytes per slot 
 BOARD_GRID: 
-#     .space 3168
     pill_left_offset:  .word 1084    # Starting memory offset for left pill
     pill_right_offset: .word 1088  # Starting memory offset for right pill
 
@@ -60,7 +59,7 @@ main:
 game_loop:
     # 1a. Check if key has been pressed
     li $v0, 32 # system call for sleeping
-    li $a0, 17 # sleep time is 17 milliseconds
+    li $a0, 17 # sleep time is 17 milliseconds (1/60 seconds)
     syscall
     
     # 1b. Check which key has been pressed
@@ -81,9 +80,9 @@ keyboard_input:                     # A key is pressed
     beq $a0, 0x77, check_orientation_w
     beq $a0, 0x61, check_orientation_a
     beq $a0, 0x64, check_orientation_d
-    beq $a0, 0x71, respond_to_Q 
-    beq $a0, 0x73, check_orientation_s # Check if the key q was pressed
-    
+    beq $a0, 0x73, check_orientation_s 
+    beq $a0, 0x71, respond_to_Q # Check if the key q was pressed
+
     li $v0, 1                       # ask system to print $a0
     syscall
 
@@ -118,7 +117,7 @@ check_orientation_d:
     j game_loop                     # If neither, return to game loop
 
 # Orientation helper function
-# Returns in $v0: 1 for horizontal, 2 for vertical, 0 for unknown
+# Returns in $v0: 1 for horizontal, 2 for vertical
 check_orientation:
     lw $t0, ADDR_DSPL         # get address display again
     lw $t1, pill_left_offset
@@ -126,14 +125,12 @@ check_orientation:
     sub $t5, $t2, $t1         # calculate offset difference
     
     # Check for horizontal orientation (difference of 4)
-#    li $v0, 0                 # return 0 if unknown orientation
     li $t6, 4
     beq $t5, $t6, horizontal_orientation
     
     # Check for vertical orientation (difference of 256)
     li $t6, 256
     beq $t5, $t6, vertical_orientation
-#    jr $ra                    # Return with $v0 = 0 (unknown orientation)
     
 horizontal_orientation:
     li $v0, 1                 # Set return value to 1 (horizontal)
@@ -192,9 +189,8 @@ respond_to_s_hor:
     
     # check for bottom wall collision
     lw $t9, 0($t6)             # load the pixel color under the pill     
-    bne $t9, $t7, skip_move_regenerate  # if new cell is white, skip moving
+    bne $t9, $t7, skip_move_regenerate  # if new cell is white, skip moving and generate new pill
 
-    
     sw $s0, 0($t5)
     sw $s1, 0($t6)
     sw $t7, 0($t3) #code for horizontal
@@ -208,10 +204,10 @@ respond_to_s_hor:
     
     
 respond_to_a_vert:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
