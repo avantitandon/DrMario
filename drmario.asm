@@ -164,7 +164,7 @@ respond_to_s_vert:
     # check for bottom wall collision
     lw $t9, 0($t6)             # load the pixel color under the pill
     li $s3, 0xffffff        
-    beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    beq $t9, $s3, skip_move_regenerate  # if new cell is white, skip moving
     
     sw $s0, 0($t5)
     sw $s1, 0($t6)
@@ -193,7 +193,7 @@ respond_to_s_hor:
     # check for bottom wall collision
     lw $t9, 0($t6)             # load the pixel color under the pill
     li $s3, 0xffffff        
-    beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    beq $t9, $s3, skip_move_regenerate  # if new cell is white, skip moving
     
     sw $s0, 0($t5)
     sw $s1, 0($t6)
@@ -270,6 +270,9 @@ respond_to_a_hor:
     skip_move:
     j game_loop
     
+    skip_move_regenerate:
+    j game_loop
+    
 respond_to_d_hor:
     lw $t0, ADDR_DSPL #get address display again
     lw $t1, pill_left_offset
@@ -288,6 +291,9 @@ respond_to_d_hor:
     lw $t9, 0($t6)             # load the pixel color to the right of pill
     li $s3, 0xffffff        
     beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    
+    # check for virus or block under the pill
+    
     
     li $t7, 0
     sw $t7, 0($t3)
