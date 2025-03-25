@@ -164,7 +164,7 @@ respond_to_s_vert:
     # check for bottom wall collision
     lw $t9, 0($t6)             # load the pixel color under the pill
     li $s3, 0xffffff        
-    beq $t9, $s3, skip_move_regenerate  # if new cell is white, skip moving
+    bne $t9, $t7, skip_move_regenerate # if new cell is white, skip moving
     
     sw $s0, 0($t5)
     sw $s1, 0($t6)
@@ -190,10 +190,13 @@ respond_to_s_hor:
     addi $t6, $t2, 256  # get offset of the left pixel
     add $t6, $t6, $t0
     
+    lw $t9, 0($t5) 
+    bne $t9, $t7, skip_move_regenerate
+    
     # check for bottom wall collision
-    lw $t9, 0($t6)             # load the pixel color under the pill
-    li $s3, 0xffffff        
-    beq $t9, $s3, skip_move_regenerate  # if new cell is white, skip moving
+    lw $t9, 0($t6)             # load the pixel color under the pill     
+    bne $t9, $t7, skip_move_regenerate  # if new cell is white, skip moving
+
     
     sw $s0, 0($t5)
     sw $s1, 0($t6)
@@ -277,6 +280,7 @@ respond_to_a_hor:
     j game_loop
     
     skip_move_regenerate:
+#    jal check_7_spots:
     jal draw_pill
     
 respond_to_d_hor:
@@ -331,8 +335,8 @@ respond_to_d_vert:
     # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     lw $t8, 0($t6)
     li $s3, 0x000000        
-    bne $t9, $s3, skip_move  # if new cell is not black, skip moving
-    bne $t8, $s3, skip_move  # if new cell is not black, skip moving
+    bne $t9, $s3, skip_move_regenerate  # if new cell is not black, skip moving
+    bne $t8, $s3, skip_move_regenerate  # if new cell is not black, skip moving
     
     li $t7, 0
     sw $t7, 0($t3)
@@ -621,3 +625,23 @@ draw_pill:
     lw $ra, 0($sp)    # return
     addiu $sp, $sp, 4
     jr $ra
+
+
+check_7_spots:
+    lw $t0, ADDR_DSPL #get address display again
+    lw $t1, pill_left_offset
+    lw $t2, pill_right_offset
+    add $t3, $t1, $t0 #gets left pills addresss
+    add $t4, $t2, $t0 # gets right pills addres
+   
+
+
+
+
+
+check_horizontal:
+
+
+
+
+check_vertical:
