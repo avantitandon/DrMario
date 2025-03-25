@@ -277,7 +277,7 @@ respond_to_a_hor:
     j game_loop
     
     skip_move_regenerate:
-    j game_loop
+    jal draw_pill
     
 respond_to_d_hor:
     lw $t0, ADDR_DSPL #get address display again
@@ -602,20 +602,22 @@ return_green:
 draw_pill:
     addiu $sp, $sp, -4  # save return address
     sw $ra, 0($sp)
-    
+
     jal generate_random_block_color  # generate random color and store in $v0
     move $a0, $v0       # move color to $a0 for drawing
     lw $t0, ADDR_DSPL # reset location
     li $t5, 1084  # position is col 63, row 4
     addu $t6, $t0, $t5 # add offset to start location
     sw $a0, 0($t6) # draw the pixel
-    
+    sw $t5, pill_left_offset
+
     jal generate_random_block_color  # repeat for the bottom half
     move $a0, $v0  # move color to $a0 for drawing
     li $t5, 1088 # position is col 64, row 4
     addu $t6, $t0, $t5 # add offset to start location
     sw $a0, 0($t6) # draw the pixel
-    
+    sw $t5, pill_right_offset
+
     lw $ra, 0($sp)    # return
     addiu $sp, $sp, 4
     jr $ra
