@@ -77,6 +77,7 @@ game_loop:
 
 keyboard_input:                     # A key is pressed
     lw $a0, 4($t0)                  # Load second word from keyboard
+    beq $a0, 0x70, handle_pause     # pause game if p is pressed
     beq $a0, 0x77, check_orientation_w
     beq $a0, 0x61, check_orientation_a
     beq $a0, 0x64, check_orientation_d
@@ -92,6 +93,191 @@ respond_to_Q:
 	li $v0, 10                      # Quit gracefully
 	syscall
 	
+handle_pause:
+    # draw pause message
+    jal display_paused_message
+    pause_loop:
+        li $v0, 32           # system call for sleeping
+        li $a0, 17           # sleep for 17 milliseconds
+        syscall
+        # Check if a key is pressed
+        lw $t0, ADDR_KBRD
+        lw $t9, 0($t0)
+        beq $t9, 1, check_pause_key   # If a key is pressed, check which one
+        j pause_loop
+    check_pause_key:
+        lw $a0, 4($t0)
+        beq $a0, 0x70, resume_game     # If 'p' is pressed again, resume game
+        j pause_loop
+    resume_game:
+        # clear the paused message by painting rows 50 to 55 black
+        lw    $t0, ADDR_DSPL
+        li    $t1, 0x000000
+        li   $t2, 50 # startrow
+        paint_black_rows:   
+            mul  $t5, $t2, 256         # row * 256
+            add  $t5, $t5, $t6
+            add  $t5, $t5, $t0        # add base address      
+            # paint 23 pixels in the row black
+            li   $t7, 23              # counter
+        draw_pixels_in_row:
+            sw   $t1, 0($t5)          # draw black pixel
+            addi  $t5, $t5, 4         # move to next pixel
+            subi  $t7, $t7, 1         # decrementcolumn counter
+            bnez  $t7, draw_pixels_in_row  # loop if more pixels to draw
+            addi  $t2, $t2, 1         # increment row
+            bgt   $t2, 54, done_painting  # exit if we've painted row 54
+            j paint_black_rows
+        done_painting:
+            j game_loop
+        
+display_paused_message:
+    lw    $t0, ADDR_DSPL
+    li    $t1, 0xffffff
+    li  $t7, 0x000000
+    li   $t2, 50               # startrow
+    li   $t3, 14               # startCol
+    # offset = (row*64 + col)*4 = row*256 + col*4
+    mul  $t5, $t2, 256         # row * 256
+    sll  $t6, $t3, 2           # col * 4
+    add  $t5, $t5, $t6
+    add  $t5, $t5, $t0         # add base address
+    # draw row 1
+    sw   $t1, 0($t5)           # draw white pixel
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    # draw row 2
+    addi  $t5, $t5, 172        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8       
+    sw   $t1, 0($t5)
+    # draw row 3
+    addi  $t5, $t5, 168        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    # draw row 4
+    addi  $t5, $t5, 168        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    # draw row 5
+    addi  $t5, $t5, 168        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    jr $ra                 # Return
+
 check_orientation_w:
     jal check_orientation     # Call helper function to determine orientation
     beq $v0, 1, respond_to_w  # If horizontal, branch to appropriate handler
@@ -386,6 +572,15 @@ respond_to_w_2:
     sw $t2, pill_right_offset # Save back to memory
     j game_loop
 
+paint_black:
+    lw $t0, ADDR_DSPL       # Load base address of display
+    addi $t1, $t0, 16384    # Calculate end address (64x64 pixels * 4 bytes)
+paint_black_loop:
+    sw $zero, 0($t0)        # Store black (0) at current address
+    addi $t0, $t0, 4        # Move to next pixel
+    bne $t0, $t1, paint_black_loop  # Loop until all pixels are black
+    jr $ra                  # Return from function
+    
 init_board: # Initializes 33x24 board to empty (type = 0, color = black)
     lw $t0, ADDR_BOARD # t0 stores board address
     li $t1, 0          # row = 0
@@ -498,6 +693,10 @@ draw_bottle:
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     jr $ra
+    
+repaint:
+    #TODO: implement
+    
 
 generate_draw_viruses:
     addiu $sp, $sp, -4  
@@ -626,7 +825,6 @@ check_7_spots:
     lw $t2, pill_right_offset
     add $t3, $t1, $t0 #gets left pills addresss
     add $t4, $t2, $t0 # gets right pills addres
-   
 
 
 
