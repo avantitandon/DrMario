@@ -223,8 +223,12 @@ respond_to_a_vert:
     
     # check for wall collision
     lw $t9, 0($t5)             # load the pixel color to the left of pill
-    li $s3, 0xffffff        
-    beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    # li $s3, 0xffffff        
+    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    lw $t8, 0($t6)
+    li $s3, 0x000000        
+    bne $t9, $s3, skip_move  # if new cell is not black, skip moving
+    bne $t8, $s3, skip_move  # if new cell is not black, skip moving
     
     sw $s0, 0($t5)
     sw $s1, 0($t6)
@@ -253,8 +257,10 @@ respond_to_a_hor:
     
     # check for left wall collision
     lw $t9, 0($t5)             # load the pixel color to the left of pill
-    li $s3, 0xffffff        
-    beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    # li $s3, 0xffffff        
+    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    li $s3, 0x000000        
+    bne $t9, $s3, skip_move  # if new cell is not black, skip moving
     
     li $t7, 0 
     sw $t7, 0($t4)
@@ -271,7 +277,7 @@ respond_to_a_hor:
     j game_loop
     
     skip_move_regenerate:
-    jal draw_pill
+    j game_loop
     
 respond_to_d_hor:
     lw $t0, ADDR_DSPL #get address display again
@@ -289,11 +295,10 @@ respond_to_d_hor:
     
     # check for right wall collision
     lw $t9, 0($t6)             # load the pixel color to the right of pill
-    li $s3, 0xffffff        
-    beq $t9, $s3, skip_move  # if new cell is white, skip moving
-    
-    # check for virus or block under the pill
-    
+    # li $s3, 0xffffff        
+    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    li $s3, 0x000000        
+    bne $t9, $s3, skip_move  # if new cell is not black, skip moving
     
     li $t7, 0
     sw $t7, 0($t3)
@@ -322,8 +327,12 @@ respond_to_d_vert:
     
     # check for right wall collision
     lw $t9, 0($t5)             # load the pixel color to the right of pill
-    li $s3, 0xffffff        
-    beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    # li $s3, 0xffffff        
+    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
+    lw $t8, 0($t6)
+    li $s3, 0x000000        
+    bne $t9, $s3, skip_move  # if new cell is not black, skip moving
+    bne $t8, $s3, skip_move  # if new cell is not black, skip moving
     
     li $t7, 0
     sw $t7, 0($t3)
@@ -355,8 +364,7 @@ respond_to_w:
     sw $t6, 0($t4)
     addi $t2, $t2, 252        # Update right pill offset
     sw $t2, pill_right_offset # Save back to memory
-    j game_loop
-    
+    j game_loop   
     
 respond_to_w_2:
     lw $t0, ADDR_DSPL #get address display again
@@ -380,7 +388,6 @@ respond_to_w_2:
     addi $t2, $t2, -252        # Update right pill offset
     sw $t2, pill_right_offset # Save back to memory
     j game_loop
-
 
 init_board: # Initializes 33x24 board to empty (type = 0, color = black)
     lw $t0, ADDR_BOARD # t0 stores board address
@@ -602,16 +609,12 @@ draw_pill:
     li $t5, 1084  # position is col 63, row 4
     addu $t6, $t0, $t5 # add offset to start location
     sw $a0, 0($t6) # draw the pixel
-    sw $t5, pill_left_offset
-
-    
     
     jal generate_random_block_color  # repeat for the bottom half
     move $a0, $v0  # move color to $a0 for drawing
     li $t5, 1088 # position is col 64, row 4
     addu $t6, $t0, $t5 # add offset to start location
     sw $a0, 0($t6) # draw the pixel
-    sw $t5, pill_right_offset
     
     lw $ra, 0($sp)    # return
     addiu $sp, $sp, 4
