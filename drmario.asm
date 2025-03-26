@@ -359,14 +359,6 @@ vertical_orientation:
     li $v0, 2                 # Set return value to 2 (vertical)
     jr $ra                    # Return to caller
 
-skip_move:
-    j game_loop
-    
-skip_move_regenerate:
-    jal store_pill   # Store current pill into game board memory
-    jal draw_pill               # Generate new falling pill
-    j game_loop
-
 store_pill:
     addiu $sp, $sp, -36         # Allocate stack space (9 words)
     sw $ra, 0($sp)              # Save return address
@@ -602,6 +594,7 @@ respond_to_a_hor:
     j game_loop
     
     skip_move_regenerate:
+    jal store_pill   # Store current pill into game board memory
     jal check_horizontal_left_pill
     jal check_horizontal_right_pill
     jal check_vertical_left_pill
