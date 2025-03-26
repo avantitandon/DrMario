@@ -514,8 +514,8 @@ respond_to_d_vert:
     # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     lw $t8, 0($t6)
     li $s3, 0x000000        
-    bne $t9, $s3, skip_move_regenerate  # if new cell is not black, skip moving
-    bne $t8, $s3, skip_move_regenerate  # if new cell is not black, skip moving
+    bne $t9, $s3, skip_move  # if new cell is not black, skip moving
+    bne $t8, $s3, skip_move  # if new cell is not black, skip moving
     
     li $t7, 0
     sw $t7, 0($t3)
