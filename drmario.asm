@@ -33,18 +33,27 @@ ADDR_BOARD:
 # Mutable Data
 ##############################################################################
 # The game board, 33  rows * 24 cols * 4 bytes per slot 
+# 1 type byte and 3 color bytes per slot
+# type 0: empty
+# type 1: virus
+# type 2: block with no other half
+# type 3: block with other half to the left
+# type 4: block with other half on top
+# type 5: block with other half to the right
+# type 6: block with other half below
 BOARD_GRID: 
-#     .space 3168
-    pill_left_offset:  .word 1084    # Starting memory offset for left pill
-    pill_right_offset: .word 1088  # Starting memory offset for right pill
+    .space 3168
+pill_left_offset:  
+    .word 1084    # Starting memory offset for left pill
+pill_right_offset: 
+    .word 1088  # Starting memory offset for right pill
+
 
 ##############################################################################
 # Code
 ##############################################################################
 	.text
 	.globl main
-
-#TODO: store the pill as a block (type 2) once a collision is detected
    
 
 main:
@@ -61,13 +70,14 @@ main:
 game_loop:
     # 1a. Check if key has been pressed
     li $v0, 32 # system call for sleeping
-    li $a0, 17 # sleep time is 17 milliseconds
+    li $a0, 17 # sleep time is 17 milliseconds (1/60 seconds)
     syscall
     
+    # 1b. Check which key has been pressed
     lw $t0, ADDR_KBRD #initialise keyboard to t0
     lw $t9, 0($t0) # load the input in the keyboard in rt9
     beq $t9, 1, keyboard_input
-    
+
     # b game_loop
     lw $t0, ADDR_DSPL        # load display address
     li $t7, 0                # black color (0)
@@ -90,7 +100,6 @@ game_loop:
     
     j respond_to_Q
     
-
 continue_game:
     # 2a. Check for collisions
     # 2b. Update locations (capsules)
@@ -99,18 +108,15 @@ continue_game:
     # 5. Go back to Step 1
     j game_loop
 
-
-
-    
-    
 keyboard_input:                     # A key is pressed
     lw $a0, 4($t0)                  # Load second word from keyboard
+    beq $a0, 0x70, handle_pause     # pause game if p is pressed
     beq $a0, 0x77, check_orientation_w
     beq $a0, 0x61, check_orientation_a
     beq $a0, 0x64, check_orientation_d
-    beq $a0, 0x71, respond_to_Q 
-    beq $a0, 0x73, check_orientation_s# Check if the key q was pressed
-    
+    beq $a0, 0x73, check_orientation_s 
+    beq $a0, 0x71, respond_to_Q # Check if the key q was pressed
+
     li $v0, 1                       # ask system to print $a0
     syscall
 
@@ -120,6 +126,191 @@ respond_to_Q:
 	li $v0, 10                      # Quit gracefully
 	syscall
 	
+handle_pause:
+    # draw pause message
+    jal display_paused_message
+    pause_loop:
+        li $v0, 32           # system call for sleeping
+        li $a0, 17           # sleep for 17 milliseconds
+        syscall
+        # Check if a key is pressed
+        lw $t0, ADDR_KBRD
+        lw $t9, 0($t0)
+        beq $t9, 1, check_pause_key   # If a key is pressed, check which one
+        j pause_loop
+    check_pause_key:
+        lw $a0, 4($t0)
+        beq $a0, 0x70, resume_game     # If 'p' is pressed again, resume game
+        j pause_loop
+    resume_game:
+        # clear the paused message by painting rows 50 to 55 black
+        lw    $t0, ADDR_DSPL
+        li    $t1, 0x000000
+        li   $t2, 50 # startrow
+        paint_black_rows:   
+            mul  $t5, $t2, 256         # row * 256
+            add  $t5, $t5, $t6
+            add  $t5, $t5, $t0        # add base address      
+            # paint 23 pixels in the row black
+            li   $t7, 23              # counter
+        draw_pixels_in_row:
+            sw   $t1, 0($t5)          # draw black pixel
+            addi  $t5, $t5, 4         # move to next pixel
+            subi  $t7, $t7, 1         # decrementcolumn counter
+            bnez  $t7, draw_pixels_in_row  # loop if more pixels to draw
+            addi  $t2, $t2, 1         # increment row
+            bgt   $t2, 54, done_painting  # exit if we've painted row 54
+            j paint_black_rows
+        done_painting:
+            j game_loop
+        
+display_paused_message:
+    lw    $t0, ADDR_DSPL
+    li    $t1, 0xffffff
+    li  $t7, 0x000000
+    li   $t2, 50               # startrow
+    li   $t3, 14               # startCol
+    # offset = (row*64 + col)*4 = row*256 + col*4
+    mul  $t5, $t2, 256         # row * 256
+    sll  $t6, $t3, 2           # col * 4
+    add  $t5, $t5, $t6
+    add  $t5, $t5, $t0         # add base address
+    # draw row 1 of "paused"
+    sw   $t1, 0($t5)           # draw white pixel
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    # draw row 2 of "paused"
+    addi  $t5, $t5, 172        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8       
+    sw   $t1, 0($t5)
+    # draw row 3 of "paused"
+    addi  $t5, $t5, 168        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    # draw row 4 of "paused"
+    addi  $t5, $t5, 168        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    # draw row 5 of "paused"
+    addi  $t5, $t5, 168        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 16        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 8        
+    sw   $t1, 0($t5)
+    addi  $t5, $t5, 4        
+    sw   $t1, 0($t5)
+    jr $ra                 # Return
+
 check_orientation_w:
     jal check_orientation     # Call helper function to determine orientation
     beq $v0, 1, respond_to_w  # If horizontal, branch to appropriate handler
@@ -145,7 +336,7 @@ check_orientation_d:
     j game_loop                     # If neither, return to game loop
 
 # Orientation helper function
-# Returns in $v0: 1 for horizontal, 2 for vertical, 0 for unknown
+# Returns in $v0: 1 for horizontal, 2 for vertical
 check_orientation:
     lw $t0, ADDR_DSPL         # get address display again
     lw $t1, pill_left_offset
@@ -153,14 +344,12 @@ check_orientation:
     sub $t5, $t2, $t1         # calculate offset difference
     
     # Check for horizontal orientation (difference of 4)
-#    li $v0, 0                 # return 0 if unknown orientation
     li $t6, 4
     beq $t5, $t6, horizontal_orientation
     
     # Check for vertical orientation (difference of 256)
     li $t6, 256
     beq $t5, $t6, vertical_orientation
-#    jr $ra                    # Return with $v0 = 0 (unknown orientation)
     
 horizontal_orientation:
     li $v0, 1                 # Set return value to 1 (horizontal)
@@ -170,11 +359,123 @@ vertical_orientation:
     li $v0, 2                 # Set return value to 2 (vertical)
     jr $ra                    # Return to caller
 
+skip_move:
+    j game_loop
+    
+skip_move_regenerate:
+    jal store_pill   # Store current pill into game board memory
+    jal draw_pill               # Generate new falling pill
+    j game_loop
+
+store_pill:
+    addiu $sp, $sp, -36         # Allocate stack space (9 words)
+    sw $ra, 0($sp)              # Save return address
+    sw $s0, 4($sp)              # Preserve s0
+    sw $s1, 8($sp)              # Preserve s1
+    sw $s2, 12($sp)             # Preserve s2
+    sw $s3, 16($sp)             # Preserve s3
+    sw $s4, 20($sp)             # Preserve s4
+    sw $s5, 24($sp)             # Preserve s5
+    sw $s6, 28($sp)             # Preserve s6
+    sw $s7, 32($sp)             # Preserve s7
+
+    lw $s0, ADDR_DSPL           # s0 = display base address
+    lw $s1, pill_left_offset    # s1 = left pill offset
+    lw $s2, pill_right_offset   # s2 = right pill offset
+
+    # determine pill orientation using offset difference
+    sub $t0, $s2, $s1           # t0 = right_offset - left_offset
+    li $t1, 4                   # Horizontal pills have 4-byte difference
+    beq $t0, $t1, horizontal_orient
+    li $t1, 256                 # Vertical pills have 256-byte (1 row) difference
+    beq $t0, $t1, vertical_orient
+    j end_store_pill            # Invalid orientation (shouldn't happen)
+
+horizontal_orient:
+    move $a0, $s1               # Arg1: left pill offset
+    li $a1, 5                  # Arg2: type code
+    jal store_pill_part         # Store left pill part
+    move $a0, $s2               # Arg1: right pill offset
+    li $a1, 3                  # Arg2: type code
+    jal store_pill_part         # Store right pill part
+    j end_store_pill
+
+vertical_orient:
+    move $a0, $s1               # Arg1: left pill offset
+    li $a1, 6                  # Arg2: type code
+    jal store_pill_part         # Store left pill part
+    move $a0, $s2               # Arg1: right pill offset
+    li $a1, 4                  # Arg2: type code
+    jal store_pill_part         # Store right pill part
+
+end_store_pill:
+    # Restore registers and return
+    lw $ra, 0($sp)              # Restore return address
+    lw $s0, 4($sp)              # Restore s0
+    lw $s1, 8($sp)              # Restore s1
+    lw $s2, 12($sp)             # Restore s2
+    lw $s3, 16($sp)             # Restore s3
+    lw $s4, 20($sp)             # Restore s4
+    lw $s5, 24($sp)             # Restore s5
+    lw $s6, 28($sp)             # Restore s6
+    lw $s7, 32($sp)             # Restore s7
+    addiu $sp, $sp, 36          # Deallocate stack space
+    jr $ra                      # Return to caller
+
+store_pill_part: # args: a0 = display offset, a1 = type code
+    addiu $sp, $sp, -24         # Allocate stack space (6 words)
+    sw $ra, 0($sp)              # Save return address
+    sw $s0, 4($sp)              # Preserve s0
+    sw $s1, 8($sp)              # Preserve s1
+    sw $s2, 12($sp)             # Preserve s2
+    sw $s3, 16($sp)             # Preserve s3
+    sw $s4, 20($sp)             # Preserve s4
+
+    lw $s0, ADDR_DSPL           # s0 = display base address
+    add $s1, $s0, $a0           # s1 = absolute display address
+    lw $s2, 0($s1)              # s2 = RGB color value
+
+    # Convert display offset to board coordinates
+    sub $t0, $s1, $s0           # t0 = offset from display base
+    srl $t0, $t0, 2             # Convert bytes->pixels (divide by 4)
+    li $t1, 64                  # 64 pixels per row
+    div $t0, $t1                # Divide pixel offset by 64
+    mflo $s3                    # s3 = display row (quotient)
+    mfhi $s4                    # s4 = display column (remainder)
+    addi $s3, $s3, -7           # board_row = display_row - 7
+    addi $s4, $s4, -3           # board_col = display_col - 3
+
+    # Calculate board memory address
+    lw $s5, ADDR_BOARD          # s5 = board base address
+    mul $t0, $s3, 24            # t0 = board_row * 24 columns
+    add $t0, $t0, $s4           # t0 += board_col
+    sll $t0, $t0, 2             # t0 *= 4 (bytes per cell)
+    add $s6, $s5, $t0           # s6 = absolute board address
+
+    # Store type and color components
+    sb $a1, 0($s6)              # Store type code in byte 0
+    srl $t0, $s2, 16            # Extract red component (bits 16-23)
+    sb $t0, 1($s6)              # Store red in byte 1
+    srl $t0, $s2, 8             # Extract green component (bits 8-15)
+    andi $t0, $t0, 0xFF         # Mask to 8 bits
+    sb $t0, 2($s6)              # Store green in byte 2
+    andi $t0, $s2, 0xFF         # Extract blue component (bits 0-7)
+    sb $t0, 3($s6)              # Store blue in byte 3
+    
+    lw $ra, 0($sp)              # Restore return address
+    lw $s0, 4($sp)              # Restore s0
+    lw $s1, 8($sp)              # Restore s1
+    lw $s2, 12($sp)             # Restore s2
+    lw $s3, 16($sp)             # Restore s3
+    lw $s4, 20($sp)             # Restore s4
+    addiu $sp, $sp, 24          # Deallocate stack space
+    jr $ra                      # Return to caller
+
 respond_to_s_vert:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
@@ -185,9 +486,8 @@ respond_to_s_vert:
     addi $t6, $t2, 256  # get offset of the right pixel
     add $t6, $t6, $t0
     
-    # check for bottom wall collision
+    # check for bottom collision
     lw $t9, 0($t6)             # load the pixel color under the pill
-    li $s3, 0xffffff        
     bne $t9, $t7, skip_move_regenerate # if new cell is white, skip moving
     
     sw $s0, 0($t5)
@@ -200,10 +500,10 @@ respond_to_s_vert:
     j game_loop
     
 respond_to_s_hor:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
@@ -214,14 +514,12 @@ respond_to_s_hor:
     addi $t6, $t2, 256  # get offset of the left pixel
     add $t6, $t6, $t0
     
+    # check for bottom collision
     lw $t9, 0($t5) 
-    bne $t9, $t7, skip_move_regenerate
-    
-    # check for bottom wall collision
+    bne $t9, $t7, skip_move_regenerate    
     lw $t9, 0($t6)             # load the pixel color under the pill     
-    bne $t9, $t7, skip_move_regenerate  # if new cell is white, skip moving
+    bne $t9, $t7, skip_move_regenerate  # if new cell is white, skip moving and generate new pill
 
-    
     sw $s0, 0($t5)
     sw $s1, 0($t6)
     sw $t7, 0($t3) #code for horizontal
@@ -235,10 +533,10 @@ respond_to_s_hor:
     
     
 respond_to_a_vert:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
@@ -261,7 +559,7 @@ respond_to_a_vert:
     sw $s1, 0($t6)
     li $t7, 0 
     sw $t7, 0($t3)
-    sw $t7, 0($t4)# code for vertical
+    sw $t7, 0($t4) # code for vertical
     addi $t2, $t2, -4
     addi $t1, $t1, -4
     sw $t1, pill_left_offset
@@ -272,7 +570,7 @@ respond_to_a_hor:
     lw $t0, ADDR_DSPL #get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3) # save current pill info
     lw $s1, 0($t4)
@@ -301,7 +599,6 @@ respond_to_a_hor:
     j game_loop
     
     skip_move:
-    
     j game_loop
     
     skip_move_regenerate:
@@ -309,15 +606,12 @@ respond_to_a_hor:
     jal check_horizontal_right_pill
     jal check_vertical_left_pill
     jal check_vertical_right_pill
-    
-#    jal check_7_spots:
 
-    
 respond_to_d_hor:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
@@ -346,10 +640,10 @@ respond_to_d_hor:
     j game_loop
 
 respond_to_d_vert:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     lw $s0, 0($t3)
     lw $s1, 0($t4)
@@ -365,8 +659,8 @@ respond_to_d_vert:
     # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     lw $t8, 0($t6)
     li $s3, 0x000000        
-    bne $t9, $s3, skip_move_regenerate  # if new cell is not black, skip moving
-    bne $t8, $s3, skip_move_regenerate  # if new cell is not black, skip moving
+    bne $t9, $s3, skip_move  # if new cell is not black, skip moving
+    bne $t8, $s3, skip_move  # if new cell is not black, skip moving
     
     li $t7, 0
     sw $t7, 0($t3)
@@ -381,10 +675,10 @@ respond_to_d_vert:
     j game_loop
 
 respond_to_w:
-    lw $t0, ADDR_DSPL #get address display again
+    lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
     lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
+    add $t3, $t1, $t0 # gets left pills addresss
     add $t4, $t2, $t0 # gets right pills address
     
     lw $s0, 0($t3)
@@ -413,7 +707,7 @@ respond_to_w_2:
     addi $t5, $t1, 4  # get offset of the right pixel
     add $t5, $t5, $t0 # Add base address to get memory address
 
-    sw $s0, 0($t5) # fornerky s1
+    sw $s0, 0($t5) 
     li $t6, 0            # Load black color (0) into $t6
     sw $t6, 0($t4)
     
@@ -423,6 +717,15 @@ respond_to_w_2:
     sw $t2, pill_right_offset # Save back to memory
     j game_loop
 
+paint_black:
+    lw $t0, ADDR_DSPL       # Load base address of display
+    addi $t1, $t0, 16384    # Calculate end address (64x64 pixels * 4 bytes)
+paint_black_loop:
+    sw $zero, 0($t0)        # Store black (0) at current address
+    addi $t0, $t0, 4        # Move to next pixel
+    bne $t0, $t1, paint_black_loop  # Loop until all pixels are black
+    jr $ra                  # Return from function
+    
 init_board: # Initializes 33x24 board to empty (type = 0, color = black)
     lw $t0, ADDR_BOARD # t0 stores board address
     li $t1, 0          # row = 0
@@ -457,8 +760,8 @@ draw_bottle:
     lw $t0, ADDR_DSPL       
     
     # left wall init
-    add $t5, $zero, $zero   # $loop variable
-    addi $t6, $zero, 34     # $heigh
+    add $t5, $zero, $zero   # loop variable
+    addi $t6, $zero, 34     # height
     addi $t8, $t0, 1548      # row 6, col 3
     
     draw_left_wall:
@@ -471,7 +774,6 @@ draw_bottle:
     add $t5, $zero, $zero
     addi $t6, $zero, 26
     addi $t8, $t0,  10252
-    
     draw_bottom_hehe:
         sw $t4, 0($t8)
         addi $t5, $t5, 1    # Increment counter
@@ -480,9 +782,8 @@ draw_bottle:
         
     # Draw right wall (from top to bottom)
     add $t5, $zero, $zero   # Reset 
-    addi $t6, $zero, 34   # $ height
+    addi $t6, $zero, 34     # height
     addi $t8, $t0, 1648     # row 6 col 28
-    
     draw_right_wall:
         sw $t4, 0($t8)      # Draw white pixel at $t8
         addi $t5, $t5, 1    # Increment counter
@@ -492,8 +793,7 @@ draw_bottle:
     # draw left half of top of bottle
     add $t5, $zero, $zero   # Reset 
     addi $t6, $zero, 10
-    addi $t8, $t0, 1548  #row 5 col 3
-
+    addi $t8, $t0, 1548  # row 5 col 3
     draw_top_h1:
         sw $t4, 0($t8)      
         addi $t5, $t5, 1    
@@ -503,7 +803,6 @@ draw_bottle:
     add $t5, $zero, $zero   # Reset 
     addi $t6, $zero, 10
     addi $t8, $t0, 1648   #row 5 col 17
-    
     draw_top_h2:
         sw $t4, 0($t8)      
         addi $t5, $t5, 1    
@@ -514,7 +813,6 @@ draw_bottle:
     add $t5, $zero, $zero   # Reset 
     addi $t6, $zero, 4
     addi $t8, $t0, 820 
-    
     draw_top_h3:
         sw $t4, 0($t8)      
         addi $t5, $t5, 1    
@@ -524,7 +822,6 @@ draw_bottle:
     add $t5, $zero, $zero   # Reset 
     addi $t6, $zero, 4
     addi $t8, $t0, 840
-    
     draw_top_h4:
         sw $t4, 0($t8)      
         addi $t5, $t5, 1    
@@ -683,7 +980,6 @@ scan_loop_left:
     
 
     bne $t8, $s0, reset_counter_left  # If colors don't match, reset counter
-    
 
     beqz $t6, mark_start_left     # If first match, remember position
     j increment_counter_left 
