@@ -663,28 +663,28 @@ check_horizontal_left_pill:
     add $t3, $t1, $t0             # Get left pill's address
     lw $s0, 0($t3)                # Get color of left pill
     
-    beqz $s0, no_match            # Skip if pill is empty/black
+    beqz $s0, no_match            # black  thus no match
     
     # Initialize check variables
     addi $t4, $t3, -16            # Start 4 positions to the left
     li $t5, 0                     # Position counter (0-6)
     li $t6, 0                     # Consecutive match counter
-    move $t7, $zero               # Starting match address
+    move $t7, $zero               # match addy
     
     j scan_loop_left
     
 scan_loop_left:
     # Check if we've reached the end of loop
-    slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
-    beqz $t9, no_match            # If $t5 >= 8, exit loop
+    slti $t9, $t5, 8              # strange syntax, otheres werent wotkng 
+    beqz $t9, no_match            # If $t5 >= 8, exit this
     
     # Check current position
-    lw $t8, 0($t4)                # Load color at current position
+    lw $t8, 0($t4)                # Load color
     
-    # Check if current position matches our color
+
     bne $t8, $s0, reset_counter_left  # If colors don't match, reset counter
     
-    # We found a matching color
+
     beqz $t6, mark_start_left     # If first match, remember position
     j increment_counter_left 
 
@@ -698,18 +698,33 @@ reset_counter_left:
     j scan_loop_left
 
 mark_start_left:
-    move $t7, $t4  
-    j increment_counter_left
+    move $t7, $t4 
+    j increment_counter_left  
     
 increment_counter_left:
     addi $t6, $t6, 1    
     
-    beq $t6, 4, respond_to_Q      # If 4 matches, we found a sequence!
+    beq $t6, 4, deal_with_hor      # If 4 matches, we found a sequence!
     
     # Move to next position
     addi $t4, $t4, 4              # Move right one pixel
     addi $t5, $t5, 1              # Increment position counter
     j scan_loop_left
+    
+deal_with_hor:
+    move $s0, $t7
+    addi $t8, $t7, 0
+    #s0 has it's original value, used later to check 5 in a row
+    li $s3, 0
+    sw $s3, 0($t7)
+    sw $s3, 4($t7)
+    sw $s3, 8($t7)
+    sw $s3, 12($t7)
+    
+return_nothing:
+   jr $ra
+    
+    # Calculate and store subsequent addresses
 
 check_horizontal_right_pill:
     # Setup: Get pill address and color
@@ -756,7 +771,7 @@ mark_start_right:
 increment_counter_right:
     addi $t6, $t6, 1    
     
-    beq $t6, 3, respond_to_Q      # If 4 matches, we found a sequence!
+    beq $t6, 4, deal_with_hor     # If 4 matches, we found a sequence!
     
     # Move to next position
     addi $t4, $t4, 4              # Move right one pixel
@@ -815,13 +830,21 @@ increment_counter_vert_left:
     addi $t6, $t6, 1
     
     # Check for 4 matches
-    beq $t6, 4, respond_to_Q      # If 4 matches, we found a sequence!
+    beq $t6, 4, deal_with_vert     # If 4 matches, we found a sequence!
     
     # Move to next position
     addi $t4, $t4, 256            # Move down one row (256 bytes)
     addi $t5, $t5, 1              # Increment position counter
     j scan_loop_vert_left
-
+    
+deal_with_vert:
+    move $s0, $t7
+    #s0 has it's original value, used later to check 5 in a row
+    li $s3, 0
+    sw $s3, 0($t7)
+    sw $s3, 256($t7)
+    sw $s3, 512($t7)
+    sw $s3, 768($t7)
 check_vertical_right_pill:
     # Setup: Get pill address and color
     lw $t0, ADDR_DSPL             # Get display base address
@@ -868,7 +891,7 @@ increment_counter_vert_right:
     addi $t6, $t6, 1
     
     # Check for 4 matches (made consistent with left pill)
-    beq $t6, 4, respond_to_Q      # If 4 matches, we found a sequence!
+    beq $t6, 4, deal_with_vert      # If 4 matches, we found a sequence!
     
     # Move to next position
     addi $t4, $t4, 256            # Move down one row (256 bytes)
