@@ -33,6 +33,7 @@ ADDR_BOARD:
 # Mutable Data
 ##############################################################################
 # The game board, 33  rows * 24 cols * 4 bytes per slot 
+# 1 type byte and 3 color bytes per slot
 # type 0: empty
 # type 1: virus
 # type 2: block with no other half
@@ -40,10 +41,13 @@ ADDR_BOARD:
 # type 4: block with other half on top
 # type 5: block with other half to the right
 # type 6: block with other half below
-
 BOARD_GRID: 
-    pill_left_offset:  .word 1084    # Starting memory offset for left pill
-    pill_right_offset: .word 1088  # Starting memory offset for right pill
+    .space 3168
+pill_left_offset:  
+    .word 1084    # Starting memory offset for left pill
+pill_right_offset: 
+    .word 1088  # Starting memory offset for right pill
+
 
 ##############################################################################
 # Code
@@ -340,7 +344,6 @@ skip_move_regenerate:
     jal draw_pill               # Generate new falling pill
     j game_loop
 
-# Uses: $s0-s7, preserves registers on stack
 store_pill:
     addiu $sp, $sp, -36         # Allocate stack space (9 words)
     sw $ra, 0($sp)              # Save return address
