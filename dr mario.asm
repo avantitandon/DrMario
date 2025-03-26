@@ -301,13 +301,14 @@ respond_to_a_hor:
     j game_loop
     
     skip_move:
+    
     j game_loop
     
     skip_move_regenerate:
     jal check_horizontal_left_pill
     jal check_horizontal_right_pill
     jal check_vertical_left_pill
-    # jal check_vertical_right_pill
+    jal check_vertical_right_pill
     
 #    jal check_7_spots:
 
@@ -654,14 +655,14 @@ draw_pill:
     lw $ra, 0($sp)    # return
     addiu $sp, $sp, 4
     jr $ra
-
-## this works, quits when we have 4 in a row 
+    
 check_horizontal_left_pill:
     # Setup: Get pill address and color
     lw $t0, ADDR_DSPL             # Get display base address
     lw $t1, pill_left_offset      # Get left pill offset
     add $t3, $t1, $t0             # Get left pill's address
     lw $s0, 0($t3)                # Get color of left pill
+    
     beqz $s0, no_match            # Skip if pill is empty/black
     
     # Initialize check variables
@@ -669,110 +670,207 @@ check_horizontal_left_pill:
     li $t5, 0                     # Position counter (0-6)
     li $t6, 0                     # Consecutive match counter
     move $t7, $zero               # Starting match address
+    
     j scan_loop_left
     
-    
 scan_loop_left:
-    bgt $t5, 7, no_match          # If we've checked all 7 positions, no match
+    # Check if we've reached the end of loop
+    slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
+    beqz $t9, no_match            # If $t5 >= 8, exit loop
     
     # Check current position
     lw $t8, 0($t4)                # Load color at current position
     
     # Check if current position matches our color
-    bne $t8, $s0, reset_counter   # If colors don't match, reset counter
+    bne $t8, $s0, reset_counter_left  # If colors don't match, reset counter
     
     # We found a matching color
-    beqz $t6, mark_start          # If first match, remember position
-    j increment_counter 
+    beqz $t6, mark_start_left     # If first match, remember position
+    j increment_counter_left 
 
 no_match:
-    j draw_pill
-
+    jr $ra
     
-
-reset_counter:
+reset_counter_left:
     li $t6, 0                     # Reset match counter
     addi $t4, $t4, 4              # Move right one pixel
     addi $t5, $t5, 1              # Increment position counter
     j scan_loop_left
 
-mark_start:
+mark_start_left:
     move $t7, $t4  
+    j increment_counter_left
     
-increment_counter:
+increment_counter_left:
     addi $t6, $t6, 1    
-    # li $v0, 1
-    # move $a0, $t6
-    # syscall# Increment match counter
-    beq $t6, 4, respond_to_Q     # If 4 matches, we found a sequence!
+    
+    beq $t6, 4, respond_to_Q      # If 4 matches, we found a sequence!
     
     # Move to next position
     addi $t4, $t4, 4              # Move right one pixel
     addi $t5, $t5, 1              # Increment position counter
     j scan_loop_left
-    
+
 check_horizontal_right_pill:
     # Setup: Get pill address and color
     lw $t0, ADDR_DSPL             # Get display base address
-    lw $t1, pill_right_offset      # Get left pill offset
-    add $t3, $t1, $t0             # Get left pill's address
-    lw $s0, 0($t3)                # Get color of left pill
+    lw $t1, pill_right_offset     # Get right pill offset
+    add $t3, $t1, $t0             # Get right pill's address
+    lw $s0, 0($t3)                # Get color of right pill
+    
     beqz $s0, no_match            # Skip if pill is empty/black
     
-    # Initialize check variables
+    # Initialize check variables - start scanning from right pill position
     addi $t4, $t3, -16            # Start 4 positions to the left
-    li $t5, 0                     # Position counter (0-6)
+    li $t5, 0                     # Position counter (0-7)
     li $t6, 0                     # Consecutive match counter
     move $t7, $zero               # Starting match address
-    j scan_loop_left
     
+    j scan_loop_right
+    
+scan_loop_right:
+    # Check if we've reached the end of loop
+    slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
+    beqz $t9, no_match            # If $t5 >= 8, exit loop
+    
+    # Check current position
+    lw $t8, 0($t4)                # Load color at current position
+    
+    # Check if current position matches our color
+    bne $t8, $s0, reset_counter_right  # If colors don't match, reset counter
+    
+    # We found a matching color
+    beqz $t6, mark_start_right    # If first match, remember position
+    j increment_counter_right 
 
+reset_counter_right:
+    li $t6, 0                     # Reset match counter
+    addi $t4, $t4, 4              # Move right one pixel
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_right
 
-##this is exactly the same code
-
+mark_start_right:
+    move $t7, $t4  
+    j increment_counter_right
+    
+increment_counter_right:
+    addi $t6, $t6, 1    
+    
+    beq $t6, 3, respond_to_Q      # If 4 matches, we found a sequence!
+    
+    # Move to next position
+    addi $t4, $t4, 4              # Move right one pixel
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_right
+    
 check_vertical_left_pill:
     # Setup: Get pill address and color
     lw $t0, ADDR_DSPL             # Get display base address
     lw $t1, pill_left_offset      # Get left pill offset
     add $t3, $t1, $t0             # Get left pill's address
     lw $s0, 0($t3)                # Get color of left pill
-    beqz $s0, no_match 
     
+    beqz $s0, vert_no_match_left  # Skip if pill is empty/black
     
-    addi $t4, $t3, -1024            # Start 4 positions to the top
-    li $t5, 0                     # Position counter (0-6)
+    # Initialize check variables
+    addi $t4, $t3, -1024          # Start 4 positions up (4*256 = 1024)
+    li $t5, 0                     # Position counter (0-7)
     li $t6, 0                     # Consecutive match counter
     move $t7, $zero               # Starting match address
-    j scan_loop_up
     
-scan_loop_up:
-     bgt $t5, 7, no_match          # If we've checked all 7 positions, no match
+    j scan_loop_vert_left
+    
+scan_loop_vert_left:
+    # Check if we've reached the end of loop
+    slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
+    beqz $t9, vert_no_match_left  # If $t5 >= 8, exit loop
     
     # Check current position
     lw $t8, 0($t4)                # Load color at current position
     
     # Check if current position matches our color
-    bne $t8, $s0, reset_counter_up  # If colors don't match, reset counter
+    bne $t8, $s0, reset_counter_vert_left  # If colors don't match, reset counter
     
     # We found a matching color
-    beqz $t6, mark_start          # If first match, remember position
-    j increment_counter_up 
+    beqz $t6, mark_start_vert_left # If first match, remember position
+    j increment_counter_vert_left
 
-reset_counter_up:
-    li $t6, 0                     # Reset match counter
-    addi $t4, $t4, 256              # Move right one pixel
-    addi $t5, $t5, 1              # Increment position counter
-    j scan_loop_up
+vert_no_match_left:
+    jr $ra
     
-increment_counter_up:
-    addi $t6, $t6, 1    
-    li $v0, 1
-    move $a0, $t6
-    syscall# Increment match counter
-    beq $t6, 4, respond_to_Q     # If 4 matches, we found a sequence!
+vert_no_match_right:
+    j draw_pill 
+
+reset_counter_vert_left:
+    li $t6, 0                     # Reset match counter
+    addi $t4, $t4, 256            # Move down one row (256 bytes)
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_vert_left
+
+mark_start_vert_left:
+    move $t7, $t4
+    j increment_counter_vert_left
+    
+increment_counter_vert_left:
+    addi $t6, $t6, 1
+    
+    # Check for 4 matches
+    beq $t6, 4, respond_to_Q      # If 4 matches, we found a sequence!
     
     # Move to next position
-    addi $t4, $t4, 256              # Move down one pixel
+    addi $t4, $t4, 256            # Move down one row (256 bytes)
     addi $t5, $t5, 1              # Increment position counter
-    j scan_loop_up
+    j scan_loop_vert_left
+
+check_vertical_right_pill:
+    # Setup: Get pill address and color
+    lw $t0, ADDR_DSPL             # Get display base address
+    lw $t1, pill_right_offset     # Get right pill offset
+    add $t3, $t1, $t0             # Get right pill's address
+    lw $s0, 0($t3)                # Get color of right pill
     
+    beqz $s0, vert_no_match_right # Skip if pill is empty/black
+    
+    # Initialize check variables
+    addi $t4, $t3, -1024          # Start 4 positions up (4*256 = 1024)
+    li $t5, 0                     # Position counter (0-7)
+    li $t6, 0                     # Consecutive match counter
+    move $t7, $zero               # Starting match address
+    
+    j scan_loop_vert_right
+    
+scan_loop_vert_right:
+    # Check if we've reached the end of loop
+    slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
+    beqz $t9, vert_no_match_right # If $t5 >= 8, exit loop
+    
+    # Check current position
+    lw $t8, 0($t4)                # Load color at current position
+    
+    # Check if current position matches our color
+    bne $t8, $s0, reset_counter_vert_right  # If colors don't match, reset counter
+    
+    # We found a matching color
+    beqz $t6, mark_start_vert_right # If first match, remember position
+    j increment_counter_vert_right
+
+reset_counter_vert_right:
+    li $t6, 0                     # Reset match counter
+    addi $t4, $t4, 256            # Move down one row (256 bytes)
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_vert_right
+
+mark_start_vert_right:
+    move $t7, $t4
+    j increment_counter_vert_right
+    
+increment_counter_vert_right:
+    addi $t6, $t6, 1
+    
+    # Check for 4 matches (made consistent with left pill)
+    beq $t6, 4, respond_to_Q      # If 4 matches, we found a sequence!
+    
+    # Move to next position
+    addi $t4, $t4, 256            # Move down one row (256 bytes)
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_vert_right
