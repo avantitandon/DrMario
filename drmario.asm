@@ -97,22 +97,62 @@ skip_gravity:
     lw $t0, ADDR_DSPL        # load display address
     li $t7, 0                # black color (0)
     
-    li $t5, 1336
-    addu $t6, $t0, $t5
-    lw $t1, 0($t6)           # load current pixel color
-    beq $t1, $t7, continue_game
+    # Check bottle neck to see if it's full
+    # li $t5, 1336
+    # addu $t6, $t0, $t5
+    # lw $t1, 0($t6)           # load current pixel color
+    # beq $t1, $t7, continue_game
     
-    li $t5, 1340
-    addu $t6, $t0, $t5
-    lw $t1, 0($t6)
-    beq $t1, $t7, continue_game
+    # li $t5, 1340
+    # addu $t6, $t0, $t5
+    # lw $t1, 0($t6)
+    # beq $t1, $t7, continue_game
     
-    li $t5, 1344
-    addu $t6, $t0, $t5
-    lw $t1, 0($t6)
-    beq $t1, $t7, continue_game 
+    # li $t5, 1344
+    # addu $t6, $t0, $t5
+    # lw $t1, 0($t6)
+    # beq $t1, $t7, continue_game 
     
-    j respond_to_Q
+    # li $t5, 1348
+    # addu $t6, $t0, $t5
+    # lw $t1, 0($t6)
+    # beq $t1, $t7, continue_game 
+    
+    # Check (1340 OR 1344)
+    # Use $s0 as flag for this condition
+    li   $s0, 0               # initialise to 0 (false)
+    li   $t5, 1340             
+    addu $t6, $t0, $t5         
+    lw   $t1, 0($t6)            
+    bne  $t1, $t7, set_flagA   # If 1340 is nonzero, set flag A
+    li   $t5, 1344             
+    addu $t6, $t0, $t5         
+    lw   $t1, 0($t6)            
+    bne  $t1, $t7, set_flagA   # If 1344 is nonzero, set flag A
+    j    check_flagB
+    set_flagA:
+        li   $s0, 1 # set true
+    check_flagB:
+        # Check (1596 OR 1600)
+        # Use $s1 as a flag for condition B
+        li   $s1, 0               # initialise to 0 (false)
+        li   $t5, 1596             
+        addu $t6, $t0, $t5         
+        lw   $t1, 0($t6)            
+        bne  $t1, $t7, set_flagB   # If 1596 is nonzero, set flag B  
+        li   $t5, 1600             
+        addu $t6, $t0, $t5         
+        lw   $t1, 0($t6)            
+        bne  $t1, $t7, set_flagB   # If 1600 is nonzero, set flag B 
+        # If neither pixel is nonzero, flag remains 0
+        j    final_check
+        set_flagB:
+            li   $s1, 1               # Set true
+    final_check:
+        # If both flags are set, then quit. otherwise, continue.
+        beq  $s0, $zero, continue_game   # If (1340 OR 1344) is zero, continue game.
+        beq  $s1, $zero, continue_game   # If (1596 OR 1600) is zero, continue game.
+        j game_over                 # Otherwise, go to game over screen
     
 continue_game:
     # 2a. Check for collisions
@@ -562,8 +602,6 @@ respond_to_a_vert:
     
     # check for wall collision
     lw $t9, 0($t5)             # load the pixel color to the left of pill
-    # li $s3, 0xffffff        
-    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     lw $t8, 0($t6)
     li $s3, 0x000000        
     bne $t9, $s3, skip_move  # if new cell is not black, skip moving
@@ -596,8 +634,6 @@ respond_to_a_hor:
     
     # check for left wall collision
     lw $t9, 0($t5)             # load the pixel color to the left of pill
-    # li $s3, 0xffffff        
-    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     li $s3, 0x000000        
     bne $t9, $s3, skip_move  # if new cell is not black, skip moving
     
@@ -639,8 +675,6 @@ respond_to_d_hor:
     
     # check for right wall collision
     lw $t9, 0($t6)             # load the pixel color to the right of pill
-    # li $s3, 0xffffff        
-    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     li $s3, 0x000000        
     bne $t9, $s3, skip_move  # if new cell is not black, skip moving
     
@@ -671,8 +705,6 @@ respond_to_d_vert:
     
     # check for right wall collision
     lw $t9, 0($t5)             # load the pixel color to the right of pill
-    # li $s3, 0xffffff        
-    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     lw $t8, 0($t6)
     li $s3, 0x000000        
     bne $t9, $s3, skip_move  # if new cell is not black, skip moving
@@ -1196,3 +1228,171 @@ increment_counter_vert_right:
     addi $t4, $t4, 256            # Move down one row (256 bytes)
     addi $t5, $t5, 1              # Increment position counter
     j scan_loop_vert_right
+    
+game_over:
+    jal display_retry_message
+    game_over_loop:
+        li $v0, 32                    
+        li $a0, 17                    # Sleep for 17 milliseconds
+        syscall 
+        lw $t0, ADDR_KBRD             # Check for key press
+        lw $t9, 0($t0)
+        beq $t9, 1, check_retry_key   # If key pressed, check if it's 'r'
+        j game_over_loop
+    check_retry_key:
+        lw $a0, 4($t0)                # Load the pressed key
+        beq $a0, 0x72, reset_game     
+        j game_over_loop              # Continue loop if not 'r'
+    reset_game:
+        jal paint_black
+        sw $zero, gravity_counter     # Reset gravity counter
+        li $t1, 1084                  # Initial pill positions
+        sw $t1, pill_left_offset
+        li $t2, 1088
+        sw $t2, pill_right_offset
+        # Re-initialize the game board and elements
+        jal init_board                 # Clear the board
+        jal draw_bottle                # Redraw the bottle
+        jal generate_draw_viruses      # Generate new viruses
+        jal draw_pill                  # Draw new pill
+        j game_loop                   # Restart the game loop
+    display_retry_message:
+        addi $sp, $sp, -4
+        sw $ra, 0($sp)  
+        jal paint_black
+        lw    $t0, ADDR_DSPL          # Load display address
+        li    $t1, 0xffffff           # White color
+        li    $t2, 25                 # Starting row
+        li    $t3, 14                 # Starting column
+        # offset = (row*64 + col)*4 = row*256 + col*4
+        mul  $t5, $t2, 256         # row * 256
+        sll  $t6, $t3, 2           # col * 4
+        add  $t5, $t5, $t6
+        add  $t5, $t5, $t0         # add base address
+        # draw row 1 of retry message
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 20
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        # draw row 2 of retry
+        addi  $t5, $t5, 160    
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 16
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 20
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        # draw row 3 of retry
+        addi  $t5, $t5, 160  
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        # draw row 4 of retry
+        addi  $t5, $t5, 164
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 16
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 24
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        # draw row 5 of retry
+        addi  $t5, $t5, 160  
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 24
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        
+        lw $ra, 0($sp)         # Restore return address
+        addi $sp, $sp, 4
+        jr $ra
+        
