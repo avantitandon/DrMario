@@ -33,6 +33,7 @@ ADDR_BOARD:
 # Mutable Data
 ##############################################################################
 # The game board, 33  rows * 24 cols * 4 bytes per slot 
+# 1 type byte and 3 color bytes per slot
 # type 0: empty
 # type 1: virus
 # type 2: block with no other half
@@ -40,10 +41,16 @@ ADDR_BOARD:
 # type 4: block with other half on top
 # type 5: block with other half to the right
 # type 6: block with other half below
-
 BOARD_GRID: 
-    pill_left_offset:  .word 1084    # Starting memory offset for left pill
-    pill_right_offset: .word 1088  # Starting memory offset for right pill
+    .space 3168
+pill_left_offset:  
+    .word 1084    # Starting memory offset for left pill
+pill_right_offset: 
+    .word 1088  # Starting memory offset for right pill
+gravity_counter: 
+    .word 0           # counter to keep track of time for gravity
+gravity_interval: 
+    .word 60         # amount to wait before applying gravity (60 frames = ~1 second at 60fps)
 
 ##############################################################################
 # Code
@@ -51,6 +58,7 @@ BOARD_GRID:
 	.text
 	.globl main
    
+
 main:
     # Initialize the board
     jal init_board
@@ -68,18 +76,59 @@ game_loop:
     li $a0, 17 # sleep time is 17 milliseconds (1/60 seconds)
     syscall
     
+    # Update gravity counter
+    lw $t0, gravity_counter
+    addi $t0, $t0, 1
+    sw $t0, gravity_counter
+    # check if it's time to apply gravity
+    lw $t1, gravity_interval
+    blt $t0, $t1, skip_gravity
+    li $t0, 0
+    sw $t0, gravity_counter #reset counter
+    jal apply_gravity
+    
+skip_gravity:
     # 1b. Check which key has been pressed
     lw $t0, ADDR_KBRD #initialise keyboard to t0
     lw $t9, 0($t0) # load the input in the keyboard in rt9
     beq $t9, 1, keyboard_input
-    
-    # 2a. Check for collisions
-	# 2b. Update locations (capsules)
-	# 3. Draw the screen
-	# 4. Sleep
 
+    # b game_loop
+    lw $t0, ADDR_DSPL        # load display address
+    li $t7, 0                # black color (0)
+    
+    li $t5, 1336
+    addu $t6, $t0, $t5
+    lw $t1, 0($t6)           # load current pixel color
+    beq $t1, $t7, continue_game
+    
+    li $t5, 1340
+    addu $t6, $t0, $t5
+    lw $t1, 0($t6)
+    beq $t1, $t7, continue_game
+    
+    li $t5, 1344
+    addu $t6, $t0, $t5
+    lw $t1, 0($t6)
+    beq $t1, $t7, continue_game 
+    
+    j respond_to_Q
+    
+continue_game:
+    # 2a. Check for collisions
+    # 2b. Update locations (capsules)
+    # 3. Draw the screen
+    # 4. Sleep
     # 5. Go back to Step 1
     j game_loop
+    
+apply_gravity:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)  
+    jal check_orientation_s # Pretend s was pressed
+    lw $ra, 0($sp)         # Restore return address
+    addi $sp, $sp, 4
+    jr $ra
 
 keyboard_input:                     # A key is pressed
     lw $a0, 4($t0)                  # Load second word from keyboard
@@ -332,15 +381,6 @@ vertical_orientation:
     li $v0, 2                 # Set return value to 2 (vertical)
     jr $ra                    # Return to caller
 
-skip_move:
-    j game_loop
-    
-skip_move_regenerate:
-    jal store_pill   # Store current pill into game board memory
-    jal draw_pill               # Generate new falling pill
-    j game_loop
-
-# Uses: $s0-s7, preserves registers on stack
 store_pill:
     addiu $sp, $sp, -36         # Allocate stack space (9 words)
     sw $ra, 0($sp)              # Save return address
@@ -572,6 +612,16 @@ respond_to_a_hor:
     sw $t2, pill_right_offset
     j game_loop
     
+    skip_move:
+    j game_loop
+    
+    skip_move_regenerate:
+    jal store_pill   # Store current pill into game board memory
+    jal check_horizontal_left_pill
+    jal check_horizontal_right_pill
+    jal check_vertical_left_pill
+    jal check_vertical_right_pill
+
 respond_to_d_hor:
     lw $t0, ADDR_DSPL # get address display again
     lw $t1, pill_left_offset
@@ -917,22 +967,242 @@ draw_pill:
     lw $ra, 0($sp)    # return
     addiu $sp, $sp, 4
     jr $ra
+    
+check_horizontal_left_pill:
+    # Setup: Get pill address and color
+    lw $t0, ADDR_DSPL             # Get display base address
+    lw $t1, pill_left_offset      # Get left pill offset
+    add $t3, $t1, $t0             # Get left pill's address
+    lw $s0, 0($t3)                # Get color of left pill
+    
+    beqz $s0, no_match            # black  thus no match
+    
+    # Initialize check variables
+    addi $t4, $t3, -16            # Start 4 positions to the left
+    li $t5, 0                     # Position counter (0-6)
+    li $t6, 0                     # Consecutive match counter
+    move $t7, $zero               # match addy
+    
+    j scan_loop_left
+    
+scan_loop_left:
+    # Check if we've reached the end of loop
+    slti $t9, $t5, 8              # strange syntax, otheres werent wotkng 
+    beqz $t9, no_match            # If $t5 >= 8, exit this
+    
+    # Check current position
+    lw $t8, 0($t4)                # Load color
+    bne $t8, $s0, reset_counter_left  # If colors don't match, reset counter
 
+    beqz $t6, mark_start_left     # If first match, remember position
+    j increment_counter_left 
 
-check_7_spots:
-    lw $t0, ADDR_DSPL #get address display again
-    lw $t1, pill_left_offset
-    lw $t2, pill_right_offset
-    add $t3, $t1, $t0 #gets left pills addresss
-    add $t4, $t2, $t0 # gets right pills addres
+no_match:
+    jr $ra
+    
+reset_counter_left:
+    li $t6, 0                     # Reset match counter
+    addi $t4, $t4, 4              # Move right one pixel
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_left
 
+mark_start_left:
+    move $t7, $t4 
+    j increment_counter_left  
+    
+increment_counter_left:
+    addi $t6, $t6, 1    
+    
+    beq $t6, 4, deal_with_hor      # If 4 matches, we found a sequence!
+    
+    # Move to next position
+    addi $t4, $t4, 4              # Move right one pixel
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_left
+    
+deal_with_hor:
+    move $s0, $t7
+    addi $t8, $t7, 0
+    #s0 has it's original value, used later to check 5 in a row
+    li $s3, 0
+    sw $s3, 0($t7)
+    sw $s3, 4($t7)
+    sw $s3, 8($t7)
+    sw $s3, 12($t7)
+    
+return_nothing:
+   jr $ra
+    
+    # Calculate and store subsequent addresses
 
+check_horizontal_right_pill:
+    # Setup: Get pill address and color
+    lw $t0, ADDR_DSPL             # Get display base address
+    lw $t1, pill_right_offset     # Get right pill offset
+    add $t3, $t1, $t0             # Get right pill's address
+    lw $s0, 0($t3)                # Get color of right pill
+    
+    beqz $s0, no_match            # Skip if pill is empty/black
+    
+    # Initialize check variables - start scanning from right pill position
+    addi $t4, $t3, -16            # Start 4 positions to the left
+    li $t5, 0                     # Position counter (0-7)
+    li $t6, 0                     # Consecutive match counter
+    move $t7, $zero               # Starting match address
+    
+    j scan_loop_right
+    
+scan_loop_right:
+    # Check if we've reached the end of loop
+    slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
+    beqz $t9, no_match            # If $t5 >= 8, exit loop
+    
+    # Check current position
+    lw $t8, 0($t4)                # Load color at current position
+    
+    # Check if current position matches our color
+    bne $t8, $s0, reset_counter_right  # If colors don't match, reset counter
+    
+    # We found a matching color
+    beqz $t6, mark_start_right    # If first match, remember position
+    j increment_counter_right 
 
+reset_counter_right:
+    li $t6, 0                     # Reset match counter
+    addi $t4, $t4, 4              # Move right one pixel
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_right
 
+mark_start_right:
+    move $t7, $t4  
+    j increment_counter_right
+    
+increment_counter_right:
+    addi $t6, $t6, 1    
+    
+    beq $t6, 4, deal_with_hor     # If 4 matches, we found a sequence!
+    
+    # Move to next position
+    addi $t4, $t4, 4              # Move right one pixel
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_right
+    
+check_vertical_left_pill:
+    # Setup: Get pill address and color
+    lw $t0, ADDR_DSPL             # Get display base address
+    lw $t1, pill_left_offset      # Get left pill offset
+    add $t3, $t1, $t0             # Get left pill's address
+    lw $s0, 0($t3)                # Get color of left pill
+    
+    beqz $s0, vert_no_match_left  # Skip if pill is empty/black
+    
+    # Initialize check variables
+    addi $t4, $t3, -1024          # Start 4 positions up (4*256 = 1024)
+    li $t5, 0                     # Position counter (0-7)
+    li $t6, 0                     # Consecutive match counter
+    move $t7, $zero               # Starting match address
+    
+    j scan_loop_vert_left
+    
+scan_loop_vert_left:
+    # Check if we've reached the end of loop
+    slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
+    beqz $t9, vert_no_match_left  # If $t5 >= 8, exit loop
+    
+    # Check current position
+    lw $t8, 0($t4)                # Load color at current position
+    
+    # Check if current position matches our color
+    bne $t8, $s0, reset_counter_vert_left  # If colors don't match, reset counter
+    
+    # We found a matching color
+    beqz $t6, mark_start_vert_left # If first match, remember position
+    j increment_counter_vert_left
 
-check_horizontal:
+vert_no_match_left:
+    jr $ra
+    
+vert_no_match_right:
+    j draw_pill 
 
+reset_counter_vert_left:
+    li $t6, 0                     # Reset match counter
+    addi $t4, $t4, 256            # Move down one row (256 bytes)
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_vert_left
 
+mark_start_vert_left:
+    move $t7, $t4
+    j increment_counter_vert_left
+    
+increment_counter_vert_left:
+    addi $t6, $t6, 1
+    
+    # Check for 4 matches
+    beq $t6, 4, deal_with_vert     # If 4 matches, we found a sequence!
+    
+    # Move to next position
+    addi $t4, $t4, 256            # Move down one row (256 bytes)
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_vert_left
+    
+deal_with_vert:
+    move $s0, $t7
+    #s0 has it's original value, used later to check 5 in a row
+    li $s3, 0
+    sw $s3, 0($t7)
+    sw $s3, 256($t7)
+    sw $s3, 512($t7)
+    sw $s3, 768($t7)
+check_vertical_right_pill:
+    # Setup: Get pill address and color
+    lw $t0, ADDR_DSPL             # Get display base address
+    lw $t1, pill_right_offset     # Get right pill offset
+    add $t3, $t1, $t0             # Get right pill's address
+    lw $s0, 0($t3)                # Get color of right pill
+    
+    beqz $s0, vert_no_match_right # Skip if pill is empty/black
+    
+    # Initialize check variables
+    addi $t4, $t3, -1024          # Start 4 positions up (4*256 = 1024)
+    li $t5, 0                     # Position counter (0-7)
+    li $t6, 0                     # Consecutive match counter
+    move $t7, $zero               # Starting match address
+    
+    j scan_loop_vert_right
+    
+scan_loop_vert_right:
+    # Check if we've reached the end of loop
+    slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
+    beqz $t9, vert_no_match_right # If $t5 >= 8, exit loop
+    
+    # Check current position
+    lw $t8, 0($t4)                # Load color at current position
+    
+    # Check if current position matches our color
+    bne $t8, $s0, reset_counter_vert_right  # If colors don't match, reset counter
+    
+    # We found a matching color
+    beqz $t6, mark_start_vert_right # If first match, remember position
+    j increment_counter_vert_right
 
+reset_counter_vert_right:
+    li $t6, 0                     # Reset match counter
+    addi $t4, $t4, 256            # Move down one row (256 bytes)
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_vert_right
 
-check_vertical:
+mark_start_vert_right:
+    move $t7, $t4
+    j increment_counter_vert_right
+    
+increment_counter_vert_right:
+    addi $t6, $t6, 1
+    
+    # Check for 4 matches (made consistent with left pill)
+    beq $t6, 4, deal_with_vert      # If 4 matches, we found a sequence!
+    
+    # Move to next position
+    addi $t4, $t4, 256            # Move down one row (256 bytes)
+    addi $t5, $t5, 1              # Increment position counter
+    j scan_loop_vert_right
