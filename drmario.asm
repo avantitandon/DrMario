@@ -621,6 +621,7 @@ respond_to_a_hor:
     jal check_horizontal_right_pill
     jal check_vertical_left_pill
     jal check_vertical_right_pill
+    j game_loop
 
 respond_to_d_hor:
     lw $t0, ADDR_DSPL # get address display again
@@ -1055,10 +1056,7 @@ scan_loop_right:
     slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
     beqz $t9, no_match            # If $t5 >= 8, exit loop
     
-    # Check current position
     lw $t8, 0($t4)                # Load color at current position
-    
-    # Check if current position matches our color
     bne $t8, $s0, reset_counter_right  # If colors don't match, reset counter
     
     # We found a matching color
@@ -1107,10 +1105,7 @@ scan_loop_vert_left:
     slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
     beqz $t9, vert_no_match_left  # If $t5 >= 8, exit loop
     
-    # Check current position
     lw $t8, 0($t4)                # Load color at current position
-    
-    # Check if current position matches our color
     bne $t8, $s0, reset_counter_vert_left  # If colors don't match, reset counter
     
     # We found a matching color
@@ -1173,11 +1168,8 @@ scan_loop_vert_right:
     # Check if we've reached the end of loop
     slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
     beqz $t9, vert_no_match_right # If $t5 >= 8, exit loop
-    
-    # Check current position
+
     lw $t8, 0($t4)                # Load color at current position
-    
-    # Check if current position matches our color
     bne $t8, $s0, reset_counter_vert_right  # If colors don't match, reset counter
     
     # We found a matching color
