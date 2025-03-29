@@ -1023,7 +1023,7 @@ increment_counter_left:
 deal_with_hor:
     move $s0, $t7
     addi $t8, $t7, 0
-    #s0 has it's original value, used later to check 5 in a row
+    # s0 has it's original value, used later to check 5 in a row
     li $s3, 0
     sw $s3, 0($t7)
     sw $s3, 4($t7)
@@ -1032,9 +1032,7 @@ deal_with_hor:
     
 return_nothing:
    jr $ra
-    
-    # Calculate and store subsequent addresses
-
+ 
 check_horizontal_right_pill:
     # Setup: Get pill address and color
     lw $t0, ADDR_DSPL             # Get display base address
