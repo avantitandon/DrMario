@@ -50,7 +50,7 @@ pill_right_offset:
 gravity_counter: 
     .word 0           # counter to keep track of time for gravity
 gravity_interval: 
-    .word 60         # amount to wait before applying gravity (60 frames = ~1 second at 60fps)
+    .word 60         # initial amount to wait before applying gravity (approx 1 sec)
 
 ##############################################################################
 # Code
@@ -84,8 +84,17 @@ game_loop:
     lw $t1, gravity_interval
     blt $t0, $t1, skip_gravity
     li $t0, 0
-    sw $t0, gravity_counter #reset counter
+    sw $t0, gravity_counter # reset counter
+    # speed up gravity over time
+    lw $t2, gravity_interval       # Reload current interval
+    subi $t2, $t2, 1               # Decrease interval
+    li $t3, 5                 
+    bge $t2, $t3, store_speed      # max speed
+    li $t2, 5                    
+    store_speed:
+        sw $t2, gravity_interval       # Store updated speed
     jal apply_gravity
+
     
 skip_gravity:
     # 1b. Check which key has been pressed
@@ -97,62 +106,28 @@ skip_gravity:
     lw $t0, ADDR_DSPL        # load display address
     li $t7, 0                # black color (0)
     
-    # Check bottle neck to see if it's full
-    # li $t5, 1336
-    # addu $t6, $t0, $t5
-    # lw $t1, 0($t6)           # load current pixel color
-    # beq $t1, $t7, continue_game
-    
-    # li $t5, 1340
-    # addu $t6, $t0, $t5
-    # lw $t1, 0($t6)
-    # beq $t1, $t7, continue_game
-    
-    # li $t5, 1344
-    # addu $t6, $t0, $t5
-    # lw $t1, 0($t6)
-    # beq $t1, $t7, continue_game 
-    
-    # li $t5, 1348
-    # addu $t6, $t0, $t5
-    # lw $t1, 0($t6)
-    # beq $t1, $t7, continue_game 
-    
-    # Check (1340 OR 1344)
-    # Use $s0 as flag for this condition
-    li   $s0, 0               # initialise to 0 (false)
-    li   $t5, 1340             
-    addu $t6, $t0, $t5         
-    lw   $t1, 0($t6)            
-    bne  $t1, $t7, set_flagA   # If 1340 is nonzero, set flag A
-    li   $t5, 1344             
-    addu $t6, $t0, $t5         
-    lw   $t1, 0($t6)            
-    bne  $t1, $t7, set_flagA   # If 1344 is nonzero, set flag A
-    j    check_flagB
-    set_flagA:
-        li   $s0, 1 # set true
-    check_flagB:
-        # Check (1596 OR 1600)
-        # Use $s1 as a flag for condition B
-        li   $s1, 0               # initialise to 0 (false)
-        li   $t5, 1596             
-        addu $t6, $t0, $t5         
-        lw   $t1, 0($t6)            
-        bne  $t1, $t7, set_flagB   # If 1596 is nonzero, set flag B  
-        li   $t5, 1600             
-        addu $t6, $t0, $t5         
-        lw   $t1, 0($t6)            
-        bne  $t1, $t7, set_flagB   # If 1600 is nonzero, set flag B 
-        # If neither pixel is nonzero, flag remains 0
-        j    final_check
-        set_flagB:
-            li   $s1, 1               # Set true
-    final_check:
-        # If both flags are set, then quit. otherwise, continue.
-        beq  $s0, $zero, continue_game   # If (1340 OR 1344) is zero, continue game.
-        beq  $s1, $zero, continue_game   # If (1596 OR 1600) is zero, continue game.
-        j game_over                 # Otherwise, go to game over screen
+    # Check bottle neck to see if it's full    
+    li   $t5, 1340     
+    addu $t6, $t0, $t5 
+    lw   $t1, 0($t6)   
+    beq  $t1, $t7, continue_game  # If any is zero, continue game
+
+    li   $t5, 1344     
+    addu $t6, $t0, $t5 
+    lw   $t1, 0($t6)   
+    beq  $t1, $t7, continue_game
+
+    li   $t5, 1596     
+    addu $t6, $t0, $t5 
+    lw   $t1, 0($t6)   
+    beq  $t1, $t7, continue_game
+
+    li   $t5, 1600     
+    addu $t6, $t0, $t5 
+    lw   $t1, 0($t6)   
+    beq  $t1, $t7, continue_game
+
+    j game_over # If all are nonzero, go to game over
     
 continue_game:
     # 2a. Check for collisions
@@ -1250,6 +1225,8 @@ game_over:
         sw $t1, pill_left_offset
         li $t2, 1088
         sw $t2, pill_right_offset
+        li $t3, 60
+        sw $t3, gravity_interval
         # Re-initialize the game board and elements
         jal init_board                 # Clear the board
         jal draw_bottle                # Redraw the bottle
@@ -1395,4 +1372,3 @@ game_over:
         lw $ra, 0($sp)         # Restore return address
         addi $sp, $sp, 4
         jr $ra
-        
