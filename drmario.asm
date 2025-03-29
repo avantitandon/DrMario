@@ -47,7 +47,10 @@ pill_left_offset:
     .word 1084    # Starting memory offset for left pill
 pill_right_offset: 
     .word 1088  # Starting memory offset for right pill
-
+gravity_counter: 
+    .word 0           # counter to keep track of time for gravity
+gravity_interval: 
+    .word 60         # amount to wait before applying gravity (60 frames = ~1 second at 60fps)
 
 ##############################################################################
 # Code
@@ -73,6 +76,18 @@ game_loop:
     li $a0, 17 # sleep time is 17 milliseconds (1/60 seconds)
     syscall
     
+    # Update gravity counter
+    lw $t0, gravity_counter
+    addi $t0, $t0, 1
+    sw $t0, gravity_counter
+    # check if it's time to apply gravity
+    lw $t1, gravity_interval
+    blt $t0, $t1, skip_gravity
+    li $t0, 0
+    sw $t0, gravity_counter #reset counter
+    jal apply_gravity
+    
+skip_gravity:
     # 1b. Check which key has been pressed
     lw $t0, ADDR_KBRD #initialise keyboard to t0
     lw $t9, 0($t0) # load the input in the keyboard in rt9
@@ -86,7 +101,6 @@ game_loop:
     addu $t6, $t0, $t5
     lw $t1, 0($t6)           # load current pixel color
     beq $t1, $t7, continue_game
-    
     
     li $t5, 1340
     addu $t6, $t0, $t5
@@ -107,6 +121,14 @@ continue_game:
     # 4. Sleep
     # 5. Go back to Step 1
     j game_loop
+    
+apply_gravity:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)  
+    jal check_orientation_s # Pretend s was pressed
+    lw $ra, 0($sp)         # Restore return address
+    addi $sp, $sp, 4
+    jr $ra
 
 keyboard_input:                     # A key is pressed
     lw $a0, 4($t0)                  # Load second word from keyboard
@@ -970,8 +992,6 @@ scan_loop_left:
     
     # Check current position
     lw $t8, 0($t4)                # Load color
-    
-
     bne $t8, $s0, reset_counter_left  # If colors don't match, reset counter
 
     beqz $t6, mark_start_left     # If first match, remember position
@@ -1003,7 +1023,7 @@ increment_counter_left:
 deal_with_hor:
     move $s0, $t7
     addi $t8, $t7, 0
-    #s0 has it's original value, used later to check 5 in a row
+    # s0 has it's original value, used later to check 5 in a row
     li $s3, 0
     sw $s3, 0($t7)
     sw $s3, 4($t7)
@@ -1012,9 +1032,7 @@ deal_with_hor:
     
 return_nothing:
    jr $ra
-    
-    # Calculate and store subsequent addresses
-
+ 
 check_horizontal_right_pill:
     # Setup: Get pill address and color
     lw $t0, ADDR_DSPL             # Get display base address
