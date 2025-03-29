@@ -47,7 +47,26 @@ pill_left_offset:
     .word 1084    # Starting memory offset for left pill
 pill_right_offset: 
     .word 1088  # Starting memory offset for right pill
+gravity_counter: 
+    .word 0           # counter to keep track of time for gravity
+gravity_interval: 
+    .word 60  
+debug_deal:
+    .asciiz "Found match, dealing with vertical match\n"
+debug_cleared:
+    .asciiz "Cleared 4 blocks\n"
+debug_gravity:
+    .asciiz "Apply gravity at position: "
+debug_above:
+    .asciiz "Position above: "
+debug_value:
+    .asciiz "Value at position above: "
+debug_moving:
+    .asciiz "Moving block down 3 rows\n"
+debug_newline:
+    .asciiz "\n"# amount to wait before applying gravity (60 frames = ~1 second at 60fps)
 
+    
 
 ##############################################################################
 # Code
@@ -73,6 +92,18 @@ game_loop:
     li $a0, 17 # sleep time is 17 milliseconds (1/60 seconds)
     syscall
     
+    # Update gravity counter
+    lw $t0, gravity_counter
+    addi $t0, $t0, 1
+    sw $t0, gravity_counter
+    # check if it's time to apply gravity
+    lw $t1, gravity_interval
+    blt $t0, $t1, skip_gravity
+    li $t0, 0
+    sw $t0, gravity_counter #reset counter
+    jal apply_gravity
+    
+skip_gravity:
     # 1b. Check which key has been pressed
     lw $t0, ADDR_KBRD #initialise keyboard to t0
     lw $t9, 0($t0) # load the input in the keyboard in rt9
@@ -82,23 +113,62 @@ game_loop:
     lw $t0, ADDR_DSPL        # load display address
     li $t7, 0                # black color (0)
     
-    li $t5, 1336
-    addu $t6, $t0, $t5
-    lw $t1, 0($t6)           # load current pixel color
-    beq $t1, $t7, continue_game
+    # Check bottle neck to see if it's full
+    # li $t5, 1336
+    # addu $t6, $t0, $t5
+    # lw $t1, 0($t6)           # load current pixel color
+    # beq $t1, $t7, continue_game
     
+    # li $t5, 1340
+    # addu $t6, $t0, $t5
+    # lw $t1, 0($t6)
+    # beq $t1, $t7, continue_game
     
-    li $t5, 1340
-    addu $t6, $t0, $t5
-    lw $t1, 0($t6)
-    beq $t1, $t7, continue_game
+    # li $t5, 1344
+    # addu $t6, $t0, $t5
+    # lw $t1, 0($t6)
+    # beq $t1, $t7, continue_game 
     
-    li $t5, 1344
-    addu $t6, $t0, $t5
-    lw $t1, 0($t6)
-    beq $t1, $t7, continue_game 
+    # li $t5, 1348
+    # addu $t6, $t0, $t5
+    # lw $t1, 0($t6)
+    # beq $t1, $t7, continue_game 
     
-    j respond_to_Q
+    # Check (1340 OR 1344)
+    # Use $s0 as flag for this condition
+    li   $s0, 0               # initialise to 0 (false)
+    li   $t5, 1340             
+    addu $t6, $t0, $t5         
+    lw   $t1, 0($t6)            
+    bne  $t1, $t7, set_flagA   # If 1340 is nonzero, set flag A
+    li   $t5, 1344             
+    addu $t6, $t0, $t5         
+    lw   $t1, 0($t6)            
+    bne  $t1, $t7, set_flagA   # If 1344 is nonzero, set flag A
+    j    check_flagB
+    set_flagA:
+        li   $s0, 1 # set true
+    check_flagB:
+        # Check (1596 OR 1600)
+        # Use $s1 as a flag for condition B
+        li   $s1, 0               # initialise to 0 (false)
+        li   $t5, 1596             
+        addu $t6, $t0, $t5         
+        lw   $t1, 0($t6)            
+        bne  $t1, $t7, set_flagB   # If 1596 is nonzero, set flag B  
+        li   $t5, 1600             
+        addu $t6, $t0, $t5         
+        lw   $t1, 0($t6)            
+        bne  $t1, $t7, set_flagB   # If 1600 is nonzero, set flag B 
+        # If neither pixel is nonzero, flag remains 0
+        j    final_check
+        set_flagB:
+            li   $s1, 1               # Set true
+    final_check:
+        # If both flags are set, then quit. otherwise, continue.
+        beq  $s0, $zero, continue_game   # If (1340 OR 1344) is zero, continue game.
+        beq  $s1, $zero, continue_game   # If (1596 OR 1600) is zero, continue game.
+        j game_over                 # Otherwise, go to game over screen
     
 continue_game:
     # 2a. Check for collisions
@@ -107,6 +177,14 @@ continue_game:
     # 4. Sleep
     # 5. Go back to Step 1
     j game_loop
+    
+apply_gravity:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)  
+    jal check_orientation_s # Pretend s was pressed
+    lw $ra, 0($sp)         # Restore return address
+    addi $sp, $sp, 4
+    jr $ra
 
 keyboard_input:                     # A key is pressed
     lw $a0, 4($t0)                  # Load second word from keyboard
@@ -359,14 +437,6 @@ vertical_orientation:
     li $v0, 2                 # Set return value to 2 (vertical)
     jr $ra                    # Return to caller
 
-skip_move:
-    j game_loop
-    
-skip_move_regenerate:
-    jal store_pill   # Store current pill into game board memory
-    jal draw_pill               # Generate new falling pill
-    j game_loop
-
 store_pill:
     addiu $sp, $sp, -36         # Allocate stack space (9 words)
     sw $ra, 0($sp)              # Save return address
@@ -548,8 +618,6 @@ respond_to_a_vert:
     
     # check for wall collision
     lw $t9, 0($t5)             # load the pixel color to the left of pill
-    # li $s3, 0xffffff        
-    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     lw $t8, 0($t6)
     li $s3, 0x000000        
     bne $t9, $s3, skip_move  # if new cell is not black, skip moving
@@ -582,8 +650,6 @@ respond_to_a_hor:
     
     # check for left wall collision
     lw $t9, 0($t5)             # load the pixel color to the left of pill
-    # li $s3, 0xffffff        
-    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     li $s3, 0x000000        
     bne $t9, $s3, skip_move  # if new cell is not black, skip moving
     
@@ -602,10 +668,12 @@ respond_to_a_hor:
     j game_loop
     
     skip_move_regenerate:
+    jal store_pill   # Store current pill into game board memory
     jal check_horizontal_left_pill
     jal check_horizontal_right_pill
     jal check_vertical_left_pill
     jal check_vertical_right_pill
+    j game_loop
 
 respond_to_d_hor:
     lw $t0, ADDR_DSPL # get address display again
@@ -623,8 +691,6 @@ respond_to_d_hor:
     
     # check for right wall collision
     lw $t9, 0($t6)             # load the pixel color to the right of pill
-    # li $s3, 0xffffff        
-    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     li $s3, 0x000000        
     bne $t9, $s3, skip_move  # if new cell is not black, skip moving
     
@@ -655,8 +721,6 @@ respond_to_d_vert:
     
     # check for right wall collision
     lw $t9, 0($t5)             # load the pixel color to the right of pill
-    # li $s3, 0xffffff        
-    # beq $t9, $s3, skip_move  # if new cell is white, skip moving
     lw $t8, 0($t6)
     li $s3, 0x000000        
     bne $t9, $s3, skip_move  # if new cell is not black, skip moving
@@ -977,8 +1041,6 @@ scan_loop_left:
     
     # Check current position
     lw $t8, 0($t4)                # Load color
-    
-
     bne $t8, $s0, reset_counter_left  # If colors don't match, reset counter
 
     beqz $t6, mark_start_left     # If first match, remember position
@@ -1010,7 +1072,7 @@ increment_counter_left:
 deal_with_hor:
     move $s0, $t7
     addi $t8, $t7, 0
-    #s0 has it's original value, used later to check 5 in a row
+    # s0 has it's original value, used later to check 5 in a row
     li $s3, 0
     sw $s3, 0($t7)
     sw $s3, 4($t7)
@@ -1019,9 +1081,7 @@ deal_with_hor:
     
 return_nothing:
    jr $ra
-    
-    # Calculate and store subsequent addresses
-
+ 
 check_horizontal_right_pill:
     # Setup: Get pill address and color
     lw $t0, ADDR_DSPL             # Get display base address
@@ -1044,10 +1104,7 @@ scan_loop_right:
     slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
     beqz $t9, no_match            # If $t5 >= 8, exit loop
     
-    # Check current position
     lw $t8, 0($t4)                # Load color at current position
-    
-    # Check if current position matches our color
     bne $t8, $s0, reset_counter_right  # If colors don't match, reset counter
     
     # We found a matching color
@@ -1096,10 +1153,7 @@ scan_loop_vert_left:
     slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
     beqz $t9, vert_no_match_left  # If $t5 >= 8, exit loop
     
-    # Check current position
     lw $t8, 0($t4)                # Load color at current position
-    
-    # Check if current position matches our color
     bne $t8, $s0, reset_counter_vert_left  # If colors don't match, reset counter
     
     # We found a matching color
@@ -1134,13 +1188,96 @@ increment_counter_vert_left:
     j scan_loop_vert_left
     
 deal_with_vert:
-    move $s0, $t7
-    #s0 has it's original value, used later to check 5 in a row
-    li $s3, 0
+    # Debug: Print that we're in deal_with_vert
+    li $v0, 4
+    la $a0, debug_deal
+    syscall
+    
+    # Debug: Print the starting position
+    li $v0, 1
+    move $a0, $t7
+    syscall
+    
+    li $v0, 4
+    la $a0, debug_newline
+    syscall
+    
+    move $s0, $t7           # s0 has original value for later
+    li $s3, 0               # Empty value
+    
+    # Clear the 4 blocks
     sw $s3, 0($t7)
     sw $s3, 256($t7)
     sw $s3, 512($t7)
     sw $s3, 768($t7)
+    
+    # Debug: Print that we cleared 4 blocks
+    li $v0, 4
+    la $a0, debug_cleared
+    syscall
+    
+    j apply_gravity_vert
+    
+apply_gravity_vert:
+    # Debug: Print current position
+    li $v0, 4
+    la $a0, debug_gravity
+    syscall
+    
+    li $v0, 1
+    move $a0, $t7
+    syscall
+    
+    li $v0, 4
+    la $a0, debug_newline
+    syscall
+    
+    addi $t8, $t7, -256     # Look at position above
+    
+    # Debug: Print the position above
+    li $v0, 4
+    la $a0, debug_above
+    syscall
+    
+    li $v0, 1
+    move $a0, $t8
+    syscall
+    
+    li $v0, 4
+    la $a0, debug_newline
+    syscall
+    
+    # Debug: Print value at position above
+    lw $s1, 0($t8)          # Load value from cell above
+    li $v0, 4
+    la $a0, debug_value
+    syscall
+    
+    li $v0, 1
+    move $a0, $s1
+    syscall
+    
+    li $v0, 4
+    la $a0, debug_newline
+    syscall
+    
+    # Check if it's empty
+    beq $s1, $s3, no_match  # If empty, we're done
+    
+    # Debug: Print we're moving a block
+    li $v0, 4
+    la $a0, debug_moving
+    syscall
+    
+    # Move the block down
+    sw $s1, 768($t7)        # Store at position 3 rows below
+    sw $s3, 0($t8)          # Clear the position above (IMPORTANT!)
+    
+    addi $t7, $t7, -256     # Move up one row
+    j apply_gravity_vert    # Continue upward
+
+# Add to your .data section:
+
 check_vertical_right_pill:
     # Setup: Get pill address and color
     lw $t0, ADDR_DSPL             # Get display base address
@@ -1162,11 +1299,8 @@ scan_loop_vert_right:
     # Check if we've reached the end of loop
     slti $t9, $t5, 8              # Set $t9 to 1 if $t5 < 8, else 0
     beqz $t9, vert_no_match_right # If $t5 >= 8, exit loop
-    
-    # Check current position
+
     lw $t8, 0($t4)                # Load color at current position
-    
-    # Check if current position matches our color
     bne $t8, $s0, reset_counter_vert_right  # If colors don't match, reset counter
     
     # We found a matching color
@@ -1193,3 +1327,171 @@ increment_counter_vert_right:
     addi $t4, $t4, 256            # Move down one row (256 bytes)
     addi $t5, $t5, 1              # Increment position counter
     j scan_loop_vert_right
+    
+game_over:
+    jal display_retry_message
+    game_over_loop:
+        li $v0, 32                    
+        li $a0, 17                    # Sleep for 17 milliseconds
+        syscall 
+        lw $t0, ADDR_KBRD             # Check for key press
+        lw $t9, 0($t0)
+        beq $t9, 1, check_retry_key   # If key pressed, check if it's 'r'
+        j game_over_loop
+    check_retry_key:
+        lw $a0, 4($t0)                # Load the pressed key
+        beq $a0, 0x72, reset_game     
+        j game_over_loop              # Continue loop if not 'r'
+    reset_game:
+        jal paint_black
+        sw $zero, gravity_counter     # Reset gravity counter
+        li $t1, 1084                  # Initial pill positions
+        sw $t1, pill_left_offset
+        li $t2, 1088
+        sw $t2, pill_right_offset
+        # Re-initialize the game board and elements
+        jal init_board                 # Clear the board
+        jal draw_bottle                # Redraw the bottle
+        jal generate_draw_viruses      # Generate new viruses
+        jal draw_pill                  # Draw new pill
+        j game_loop                   # Restart the game loop
+    display_retry_message:
+        addi $sp, $sp, -4
+        sw $ra, 0($sp)  
+        jal paint_black
+        lw    $t0, ADDR_DSPL          # Load display address
+        li    $t1, 0xffffff           # White color
+        li    $t2, 25                 # Starting row
+        li    $t3, 14                 # Starting column
+        # offset = (row*64 + col)*4 = row*256 + col*4
+        mul  $t5, $t2, 256         # row * 256
+        sll  $t6, $t3, 2           # col * 4
+        add  $t5, $t5, $t6
+        add  $t5, $t5, $t0         # add base address
+        # draw row 1 of retry message
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 20
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        # draw row 2 of retry
+        addi  $t5, $t5, 160    
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 16
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 20
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        # draw row 3 of retry
+        addi  $t5, $t5, 160  
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        # draw row 4 of retry
+        addi  $t5, $t5, 164
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 16
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 24
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        # draw row 5 of retry
+        addi  $t5, $t5, 160  
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 4
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 12
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 24
+        sw   $t1, 0($t5)
+        addi  $t5, $t5, 8
+        sw   $t1, 0($t5)
+        
+        lw $ra, 0($sp)         # Restore return address
+        addi $sp, $sp, 4
+        jr $ra
+        
