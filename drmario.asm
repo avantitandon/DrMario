@@ -189,6 +189,7 @@ apply_gravity:
 keyboard_input:                     # A key is pressed
     lw $a0, 4($t0)                  # Load second word from keyboard
     beq $a0, 0x70, handle_pause     # pause game if p is pressed
+    beq $a0, 0x6f, save_pixel_feature
     beq $a0, 0x77, check_orientation_w
     beq $a0, 0x61, check_orientation_a
     beq $a0, 0x64, check_orientation_d
@@ -1069,15 +1070,89 @@ increment_counter_left:
     addi $t5, $t5, 1              # Increment position counter
     j scan_loop_left
     
+# deal_with_hor:
+    # move $s0, $t7
+    # addi $t8, $t7, 0
+    # # s0 has it's original value, used later to check 5 in a row
+    # li $s3, 0
+    # sw $s3, 0($t7)
+    # sw $s3, 4($t7)
+    # sw $s3, 8($t7)
+    # sw $s3, 12($t7)
+    
 deal_with_hor:
-    move $s0, $t7
-    addi $t8, $t7, 0
-    # s0 has it's original value, used later to check 5 in a row
-    li $s3, 0
-    sw $s3, 0($t7)
-    sw $s3, 4($t7)
-    sw $s3, 8($t7)
-    sw $s3, 12($t7)
+    # Save return address
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    # Store starting position
+    move $s0, $t7           # s0 has original value for later
+    addi $t8, $t7, 0        # Store initial position in t8
+    li $s3, 0               # Empty value (black)
+    
+    # Clear the 4 horizontal blocks
+    sw $s3, 0($t7)          # Clear first block
+    sw $s3, 4($t7)          # Clear second block
+    sw $s3, 8($t7)          # Clear third block
+    sw $s3, 12($t7)         # Clear fourth block
+    
+    # Apply gravity to each of the 4 columns
+    
+    # First column
+    jal apply_gravity_single
+    
+    # Second column
+    addi $t7, $t8, 4        # Move to second position
+    jal apply_gravity_single
+    
+    # Third column
+    addi $t7, $t8, 8        # Move to third position
+    jal apply_gravity_single
+    
+    # Fourth column
+    addi $t7, $t8, 12       # Move to fourth position
+    jal apply_gravity_single
+    
+    # Restore return address and return
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+
+# Apply gravity to a single column
+apply_gravity_single:
+    # Save return address and registers
+    addi $sp, $sp, -12
+    sw $ra, 0($sp)
+    sw $s1, 4($sp)
+    sw $t9, 8($sp)
+    
+    # Look at position directly above
+    addi $t9, $t7, -256    # Position above current position
+    
+    # Check if we're at the top of the display
+    li $t0, 0x10008000     # Display base address
+    sub $t5, $t9, $t0
+    bltz $t5, done_single  # If above the display, we're done
+    
+    # Check if there's a block above
+    lw $s1, 0($t9)         # Load value from cell above
+    beqz $s1, done_single  # If empty, we're done
+    
+    # Move the block down
+    sw $s1, 0($t7)         # Move block down to cleared position
+    sw $s3, 0($t9)         # Clear the position above
+    
+    # Continue with the next block above
+    addi $t7, $t7, -256    # Move up one row for next check
+    jal apply_gravity_single
+    
+done_single:
+    # Restore registers and return
+    lw $ra, 0($sp)
+    lw $s1, 4($sp)
+    lw $t9, 8($sp)
+    addi $sp, $sp, 12
+    jr $ra
     
 return_nothing:
    jr $ra
@@ -1495,3 +1570,5 @@ game_over:
         addi $sp, $sp, 4
         jr $ra
         
+save_pixel_feature:
+      
