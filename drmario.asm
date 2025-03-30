@@ -93,9 +93,9 @@ game_loop:
     li $t2, 5                    
     store_speed:
         sw $t2, gravity_interval       # Store updated speed
+    jal drop_all_blocks
     jal apply_gravity
 
-    
 skip_gravity:
     # 1b. Check which key has been pressed
     lw $t0, ADDR_KBRD #initialise keyboard to t0
@@ -1093,11 +1093,15 @@ store_cleared_block:
     add    $s6, $s5, $t0      # s6 = absolute board address
 
     # Write type and color into the board.
-    sb     $a1, 0($s6)        # Store type (0) in byte 0.
+    sb     $zero, 0($s6)        # Store type (0) in byte 0.
     li     $t2, 0             # Black color (0x000000).
     sb     $t2, 1($s6)        # red = 0
     sb     $t2, 2($s6)        # green = 0
     sb     $t2, 3($s6)        # blue = 0
+    
+    move   $a0, $s3         # a0 = board row
+    move   $a1, $s4         # a1 = board col
+    jal    update_orphaned_neighbors
 
     lw     $ra, 0($sp)
     lw     $s0, 4($sp)
@@ -1300,6 +1304,86 @@ increment_counter_vert_right:
     addi $t5, $t5, 1              # Increment position counter
     j scan_loop_vert_right
     
+update_orphaned_neighbors:
+    addiu  $sp, $sp, -28       # Allocate stack space for 7 registers
+    sw     $ra, 0($sp)         # Save return address
+    sw     $t0, 4($sp)
+    sw     $t1, 8($sp)
+    sw     $t2, 12($sp)
+    sw     $t3, 16($sp)
+    sw     $t4, 20($sp)
+    sw     $t5, 24($sp)
+
+    lw     $t0, ADDR_BOARD      # Load board base address into t0
+
+    # Check left neighbor (cell at (row, col-1)) if col > 0.
+    blez   $a1, check_right_neighbor   # if board col <= 0, skip left
+    addi   $t1, $a1, -1         # t1 = col - 1
+    mul    $t2, $a0, 24         # t2 = row * 24
+    add    $t2, $t2, $t1        # t2 = row*24 + (col-1)
+    sll    $t2, $t2, 2          # convert to byte offset
+    add    $t2, $t0, $t2        # absolute address of left neighbor
+    lb     $t3, 0($t2)          # load type from left neighbor
+    beq  $t3, $zero, check_right_neighbor
+    li     $t4, 5               # expected type for a left-half block (5)
+    bne    $t3, $t4, check_right_neighbor
+    li     $t4, 2               # update type to 2
+    sb     $t4, 0($t2)          # store updated type
+check_right_neighbor:
+    # Check right neighbor (cell at (row, col+1)) if col < 23.
+    li     $t5, 23
+    bge    $a1, $t5, check_above_neighbor  # if col >= 23, skip right neighbor
+    addi   $t1, $a1, 1          # t1 = col + 1
+    mul    $t2, $a0, 24         # t2 = row * 24
+    add    $t2, $t2, $t1        # t2 = row*24 + (col+1)
+    sll    $t2, $t2, 2          # convert to byte offset
+    add    $t2, $t0, $t2        # absolute address of right neighbor
+    lb     $t3, 0($t2)          # load type from right neighbor
+    beq  $t3, $zero, check_above_neighbor
+    li     $t4, 3               # expected type for a right-half block (3)
+    bne    $t3, $t4, check_above_neighbor
+    li     $t4, 2               # update type to 2
+    sb     $t4, 0($t2)          # store updated type
+check_above_neighbor:
+    # Check above neighbor (cell at (row-1, col)) if row > 0.
+    blez   $a0, check_below_neighbor   # if row <= 0, skip above neighbor
+    addi   $t1, $a0, -1         # t1 = row - 1
+    mul    $t2, $t1, 24         # t2 = (row-1) * 24
+    add    $t2, $t2, $a1        # t2 = (row-1)*24 + col
+    sll    $t2, $t2, 2          # convert to byte offset
+    add    $t2, $t0, $t2        # absolute address of above neighbor
+    lb     $t3, 0($t2)          # load type from above neighbor
+    beq  $t3, $zero, check_below_neighbor
+    li     $t4, 6               # expected type for a top-half block (6)
+    bne    $t3, $t4, check_below_neighbor
+    li     $t4, 2               # update type to 2
+    sb     $t4, 0($t2)          # store updated type
+check_below_neighbor:
+    # Check below neighbor (cell at (row+1, col)) if row < 32.
+    li     $t5, 32
+    bge    $a0, $t5, finish_update  # if row >= 32, skip below neighbor
+    addi   $t1, $a0, 1          # t1 = row + 1
+    mul    $t2, $t1, 24         # t2 = (row+1) * 24
+    add    $t2, $t2, $a1        # t2 = (row+1)*24 + col
+    sll    $t2, $t2, 2          # convert to byte offset
+    add    $t2, $t0, $t2        # absolute address of below neighbor
+    lb     $t3, 0($t2)          # load type from below neighbor
+    beq  $t3, $zero, finish_update
+    li     $t4, 4               # expected type for a bottom-half block (4)
+    bne    $t3, $t4, finish_update
+    li     $t4, 2               # update type to 2
+    sb     $t4, 0($t2)          # store updated type
+finish_update:
+    lw     $ra, 0($sp)
+    lw     $t0, 4($sp)
+    lw     $t1, 8($sp)
+    lw     $t2, 12($sp)
+    lw     $t3, 16($sp)
+    lw     $t4, 20($sp)
+    lw     $t5, 24($sp)
+    addiu  $sp, $sp, 28
+    jr     $ra                
+    
 game_over:
     jal display_retry_message
     game_over_loop:
@@ -1468,3 +1552,304 @@ game_over:
         lw $ra, 0($sp)         # Restore return address
         addi $sp, $sp, 4
         jr $ra
+        
+# Iterates 10 passes over the board (33 rows × 24 cols). For each cell:
+#  - If the type is 0 or 1, nothing is done.
+#  - For type 2,4,5: if the cell immediately below is empty then copy the block
+#    one row down and clear the original.
+#  - For type 3 (horizontal pill right–half): if not at bottom or left edge,
+#    and both the cell directly below and the one below the left neighbor are empty,
+#    then drop both the current cell and its left partner.
+#  - For type 6 (vertical pill top–half): if row+2 is in bounds and the cell two rows
+#    down is empty, then drop both this cell and the one immediately below.
+drop_all_blocks:
+    addiu  $sp, $sp, -68
+    sw     $ra, 0($sp)
+    sw     $s0, 4($sp)
+    sw     $s1, 8($sp)
+    sw     $s2, 12($sp)
+    sw     $s3, 16($sp)
+    sw     $s4, 20($sp)
+    sw     $s5, 24($sp)
+    sw     $s6, 28($sp)
+    sw     $s7, 32($sp)
+    sw     $t0, 36($sp)
+    sw     $t1, 40($sp)
+    sw     $t2, 44($sp)
+    sw     $t3, 48($sp)
+    sw     $t4, 52($sp)
+    sw     $t5, 56($sp)
+    sw     $t6, 60($sp)
+    sw     $t7, 64($sp)
+
+    lw     $s0, ADDR_BOARD
+    li     $s1, 10       # Use $s1 as our pass counter (10 passes)
+
+drop_pass_loop:
+    beqz   $s1, drop_all_blocks_end
+    addi   $s1, $s1, -1
+
+    li     $s2, 31     # For each pass, iterate rows (we process rows 31 downto 0)
+row_loop:
+    bltz   $s2, end_of_pass   # when row index becomes negative, finish pass
+    li     $s3, 0     # Set col index = 0 for each row
+
+col_loop:
+    bge    $s3, 24, next_row  # if col >= 24, go to next row
+
+    # Compute current cell address:
+    #   offset = ((row * 24) + col) * 4, then add board base in $s0.
+    mul    $t0, $s2, 24
+    add    $t0, $t0, $s3
+    sll    $t0, $t0, 2
+    add    $t0, $s0, $t0
+
+    # Load cell type (stored as the first byte)
+    lb     $t1, 0($t0)
+
+    # If type is 0 or 1, do nothing.
+    li     $t2, 0
+    beq    $t1, $t2, cell_end
+    li     $t2, 1
+    beq    $t1, $t2, cell_end
+
+    # For types 2, 4, and 5: drop normally.
+    li     $t2, 2
+    beq    $t1, $t2, drop_normal
+    li     $t2, 4
+    beq    $t1, $t2, drop_normal
+    li     $t2, 5
+    beq    $t1, $t2, drop_normal
+
+    # For type 3 (horizontal pill, right half)
+    li     $t2, 3
+    beq    $t1, $t2, drop_horizontal
+
+    # For type 6 (vertical pill, top half)
+    li     $t2, 6
+    beq    $t1, $t2, drop_vertical
+
+    j      cell_end   # If type not handled, do nothing
+
+# drop_normal:  For types 2,4,5.
+# If the cell is not in the bottom row, check the cell immediately below.
+# If below is empty, move the block down one row.
+drop_normal:
+    li     $t2, 32
+    beq    $s2, $t2, cell_end   # if current row == 32 (bottom row), skip drop
+
+    addi   $t3, $s2, 1          # t3 = row + 1
+    mul    $t4, $t3, 24
+    add    $t4, $t4, $s3        # t4 = (row+1)*24 + col
+    sll    $t4, $t4, 2
+    add    $t4, $s0, $t4        # t4 = address of cell below
+
+    lb     $t5, 0($t4)          # check type of below cell
+    li     $t6, 0
+    bne    $t5, $t6, cell_end   # if not empty, do nothing
+
+    # Move the block: copy 4 bytes from current cell to the cell below.
+    lw     $t7, 0($t0)
+    sw     $t7, 0($t4)
+    sw     $zero, 0($t0)        # clear original cell
+    
+    # update display
+    #   board row = s2+1, board col = s3, color = t7 (block data)
+    addi   $a0, $s2, 1
+    move   $a1, $s3
+    move   $a2, $t7
+    jal    update_display
+
+    # board row = s2, board col = s3, color = 0.
+    move   $a0, $s2
+    move   $a1, $s3
+    li     $a2, 0
+    jal    update_display
+    
+    j      cell_end
+
+# drop_horizontal: For type 3 (horizontal pill right–half).
+# Ensure not on bottom row and not in leftmost column.
+# Check that both the cell directly below (for right half)
+# and the cell below the left partner are empty. Then drop both.
+drop_horizontal:
+    li     $t2, 32
+    beq    $s2, $t2, cell_end    # if on bottom row, cannot drop
+    beqz   $s3, cell_end         # if col == 0, no left partner
+
+    # Compute destination for right half:
+    addi   $t3, $s2, 1           # new row = s2 + 1
+    mul    $t4, $t3, 24
+    add    $t4, $t4, $s3         # destination index for right half = (s2+1)*24 + s3
+    sll    $t4, $t4, 2
+    add    $t4, $s0, $t4         # t4 = destination address for right half
+
+    # Compute destination for left half:
+    addi   $t5, $s3, -1          # new column for left half = s3 - 1
+    addi   $t7, $s2, 1           # new row for left half = s2 + 1
+    mul    $t5, $t7, 24          # t5 = (s2+1)*24
+    add    $t5, $t5, $t5         # this line is replaced by:
+         # Instead, compute destination index for left half:
+    mul    $t5, $t7, 24          # t5 = (s2+1)*24
+    addi   $t6, $s3, -1          # t6 = s3 - 1
+    add    $t5, $t5, $t6         # t5 = (s2+1)*24 + (s3-1)
+    sll    $t5, $t5, 2           # convert to byte offset
+    add    $t5, $s0, $t5         # t5 = destination address for left half
+
+    # Check that both destination cells are empty.
+    lb     $t8, 0($t4)
+    li     $t9, 0
+    bne    $t8, $t9, cell_end
+    lb     $t8, 0($t5)
+    bne    $t8, $t9, cell_end
+
+    # Get current block data:
+    # Current right half is at $t0 (already computed in the loop).
+    lw     $t6, 0($t0)           # $t6 = data from current right half cell
+
+    # Compute current left partner address:
+    mul    $t8, $s2, 24          # t8 = s2 * 24
+    addi   $t7, $s3, -1          # t7 = s3 - 1
+    add    $t8, $t8, $t7         # t8 = s2*24 + (s3-1)
+    sll    $t8, $t8, 2           # convert to byte offset
+    add    $t8, $s0, $t8         # t8 = current left partner address
+    lw     $t7, 0($t8)           # $t7 = data from current left half cell
+
+    # Move blocks in memory:
+    sw     $t6, 0($t4)           # move right half data to destination (t4)
+    sw     $t7, 0($t5)           # move left half data to destination (t5)
+    sw     $zero, 0($t0)         # clear current right half cell
+    sw     $zero, 0($t8)         # clear current left half cell
+
+    # Update display for destination right half:
+    addi   $a0, $s2, 1          # new row = s2+1
+    move   $a1, $s3             # col remains s3
+    move   $a2, $t6             # color from right half
+    jal    update_display
+
+    # Update display for destination left half:
+    addi   $a0, $s2, 1
+    addi   $a1, $s3, -1         # new col = s3 - 1
+    move   $a2, $t7             # color from left half
+    jal    update_display
+
+    # Update display for cleared source right half:
+    move   $a0, $s2             # current row s2
+    move   $a1, $s3             # current col s3
+    li     $a2, 0
+    jal    update_display
+
+    # Update display for cleared source left half:
+    move   $a0, $s2
+    addi   $a1, $s3, -1
+    li     $a2, 0
+    jal    update_display
+
+    j cell_end
+
+# drop_vertical: For type 6 (vertical pill top–half).
+# Only drop if row+2 is in bounds.
+# We assume the bottom half is directly below the top half.
+# Check that the destination for the bottom half (row+2) is empty.
+drop_vertical:
+    li     $t2, 31               # Check if the current row is at the bottom
+    bge    $s2, $t2, cell_end    # If row >= 31, exit
+
+    # Calculate the destination for the top half of the vertical pill
+    addi   $t3, $s2, 1           # t3 = row + 1 (destination for top half)
+    mul    $t4, $t3, 24           # t4 = (row+1) * 24
+    add    $t4, $t4, $s3          # t4 = (row+1) * 24 + col
+    sll    $t4, $t4, 2            # t4 = byte offset for top half
+    add    $t4, $s0, $t4          # t4 = destination address for top half
+
+    # Calculate the destination for the bottom half of the vertical pill
+    addi   $t5, $s2, 2           # t5 = row + 2 (destination for bottom half)
+    mul    $t6, $t5, 24           # t6 = (row+2) * 24
+    add    $t6, $t6, $s3          # t6 = (row+2) * 24 + col
+    sll    $t6, $t6, 2            # t6 = byte offset for bottom half
+    add    $t6, $s0, $t6          # t6 = destination address for bottom half
+
+    # Check if the bottom half is empty
+    lb     $t7, 0($t6)            # Load the type of the bottom half
+    li     $t8, 0                 # Check if it's empty (type 0)
+    bne    $t7, $t8, cell_end     # If not empty, do nothing
+
+    # Move the blocks: copy 4 bytes from the current top and bottom halves to the new locations
+    lw     $t9, 0($t0)            # Load the data from the current top half
+    sw     $t9, 0($t4)            # Store it in the destination for the top half
+    lw     $t9, 0($t0)            # Load the data from the current bottom half
+    sw     $t9, 0($t6)            # Store it in the destination for the bottom half
+
+    # Clear the original cells (set both the top and bottom halves to 0)
+    sw     $zero, 0($t0)          # Clear the top half
+    sw     $zero, 0($t0)          # Clear the bottom half
+
+    # Update the display for both halves
+    addi   $a0, $s2, 1            # new row = s2 + 1 for top half
+    move   $a1, $s3               # same column for top half
+    move   $a2, $t9               # color for the top half
+    jal    update_display
+
+    addi   $a0, $s2, 2            # new row = s2 + 2 for bottom half
+    move   $a1, $s3               # same column for bottom half
+    move   $a2, $t9               # color for the bottom half
+    jal    update_display
+
+    # Update the display for the cleared original cells
+    move   $a0, $s2               # current row for top half
+    move   $a1, $s3               # current column for top half
+    li     $a2, 0                 # clear color for top half
+    jal    update_display
+
+    addi   $a0, $s2, 1            # current row for bottom half
+    move   $a1, $s3               # current column for bottom half
+    li     $a2, 0                 # clear color for bottom half
+    jal    update_display
+
+    j      cell_end               # End of vertical drop operation
+
+cell_end:
+    addi   $s3, $s3, 1        # Increment col index
+    j      col_loop
+
+next_row:
+    addi   $s2, $s2, -1       # Decrement row index
+    j      row_loop
+
+end_of_pass:
+    j      drop_pass_loop
+
+drop_all_blocks_end:
+    # Restore registers.
+    lw     $t7, 64($sp)
+    lw     $t6, 60($sp)
+    lw     $t5, 56($sp)
+    lw     $t4, 52($sp)
+    lw     $t3, 48($sp)
+    lw     $t2, 44($sp)
+    lw     $t1, 40($sp)
+    lw     $t0, 36($sp)
+    lw     $s7, 32($sp)
+    lw     $s6, 28($sp)
+    lw     $s5, 24($sp)
+    lw     $s4, 20($sp)
+    lw     $s3, 16($sp)
+    lw     $s2, 12($sp)
+    lw     $s1, 8($sp)
+    lw     $s0, 4($sp)
+    lw     $ra, 0($sp)
+    addiu  $sp, $sp, 68
+    jr     $ra
+
+update_display:
+    # Save registers if needed (only using temporary $t registers here)
+    lw   $t0, ADDR_DSPL       # $t0 = display base address
+    addi $t1, $a0, 7          # display row = board row + 7
+    li   $t2, 64
+    mul  $t1, $t1, $t2        # $t1 = display row * 64
+    addi $t3, $a1, 3          # display col = board col + 3
+    add  $t1, $t1, $t3       # $t1 = (display row * 64) + display col
+    sll  $t1, $t1, 2         # multiply by 4 to get byte offset
+    add  $t1, $t0, $t1       # final display address
+    sw   $a2, 0($t1)         # update pixel with color in $a2
+    jr   $ra
