@@ -732,6 +732,10 @@
         
         addi $t5, $t1, 256        # Add 256 to get offset of pixel one row below
         add $t5, $t5, $t0 # Add base address to get memory address
+        
+        # check for collision
+        lw   $t7, 0($t5)            # read whatever is currently in that pixel
+        bne  $t7, $zero, skip_w     # if it's not zero, skip rotation
     
         sw $s1, 0($t5)
         li $t6, 0            # Load black color (0) into $t6
@@ -752,6 +756,10 @@
         
         addi $t5, $t1, 4  # get offset of the right pixel
         add $t5, $t5, $t0 # Add base address to get memory address
+        
+        # check for collision
+        lw   $t7, 0($t5)            # read whatever is currently in that pixel
+        bne  $t7, $zero, skip_w     # if it's not zero, skip rotation
     
         sw $s0, 0($t5) 
         li $t6, 0            # Load black color (0) into $t6
@@ -761,6 +769,9 @@
         
         addi $t2, $t2, -252        # Update right pill offset
         sw $t2, pill_right_offset # Save back to memory
+        j game_loop
+        
+    skip_w:
         j game_loop
     
     paint_black:
@@ -1807,3 +1818,5 @@ drop_all_blocks:
     drop_end:
         # restore all registers (nvm I think it's unnecessary)
         jr      $ra
+
+ 
