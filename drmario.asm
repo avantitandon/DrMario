@@ -52,6 +52,24 @@
     gravity_interval: 
         .word 60         # initial amount to wait before applying gravity (approx 1 sec)
     
+    .macro CONVERT_COLOR(%reg)
+        addiu $sp, $sp, -4      # allocate stack space for $t0
+        sw    $t0, 0($sp)       # save $t0
+        li   $t0, 0x900000         # dark red
+        beq  %reg, $t0, two         # if equals dark red, jump
+        li   $t0, 0x009000         # dark green
+        beq  %reg, $t0, three         # if equals dark green, jump
+        li   $t0, 0x000090         # dark blue
+        beq  %reg, $t0, four         # if equals dark blue, jump
+        j    five                 # else, do nothing
+    two:  li   %reg, 0xff0000      # convert dark red to bright red
+        j    five
+    three:  li   %reg, 0x00ff00        # convert dark green to bright green
+        j    five
+    four:  li   %reg, 0x0000ff        # convert dark blue to bright blue
+    five:  lw   $t0, 0($sp)       # restore original $t0
+        addiu $sp, $sp, 4       # deallocate stack space
+    .end_macro
     ##############################################################################
     # Code
     ##############################################################################
@@ -103,7 +121,6 @@
         lw $t9, 0($t0) # load the input in the keyboard in rt9
         beq $t9, 1, keyboard_input
     
-        # b game_loop
         lw $t0, ADDR_DSPL        # load display address
         li $t7, 0                # black color (0)
         
@@ -478,6 +495,7 @@
         # Calculate board memory address
         lw $s5, ADDR_BOARD          # s5 = board base address
         mul $t0, $s3, 24            # t0 = board_row * 24 columns
+        subi $t0, $t0, 1           # NEW BECAUSE IT WAS OFF BY ONE
         add $t0, $t0, $s4           # t0 += board_col
         sll $t0, $t0, 2             # t0 *= 4 (bytes per cell)
         add $s6, $s5, $t0           # s6 = absolute board address
@@ -888,6 +906,7 @@
         #calculate memory offset
         mul $t6, $t9, 24      # t6 = row * 24
         add $t6, $t6, $t8     # t6 = row * 24 + col
+        subi $t6, $t6, 1     # NEW BC OFF BY ONE
         mul $t6, $t6, 4       # t6 = offset in bytes
         lw $t3, ADDR_BOARD    # base address of board
         add $t3, $t3, $t6     # t3 = base + offset
@@ -1010,6 +1029,8 @@
     
     # Check current position
     lw $t8, 0($t4)                # Load color
+    CONVERT_COLOR($t8)             # Normalize cell color
+    CONVERT_COLOR($s0)             # Normalize expected color 
     bne $t8, $s0, reset_counter_left  # If colors don't match, reset counter
 
     beqz $t6, mark_start_left     # If first match, remember position
@@ -1101,6 +1122,7 @@
         lw     $s5, ADDR_BOARD    # s5 = board base address
         mul    $t0, $s3, 24       # t0 = board_row * 24 columns
         add    $t0, $t0, $s4      # t0 = board_row * 24 + board_col
+        subi $t0, $t0, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
         sll    $t0, $t0, 2        # t0 = byte offset (each cell is 4 bytes)
         add    $s6, $s5, $t0      # s6 = absolute board address
     
@@ -1149,6 +1171,8 @@
         beqz $t9, no_match            # If $t5 >= 8, exit loop
         
         lw $t8, 0($t4)                # Load color at current position
+        CONVERT_COLOR($t8)             # Normalize cell color
+        CONVERT_COLOR($s0)             # Normalize expected color 
         bne $t8, $s0, reset_counter_right  # If colors don't match, reset counter
         
         # We found a matching color
@@ -1198,6 +1222,8 @@
         beqz $t9, vert_no_match_left  # If $t5 >= 8, exit loop
         
         lw $t8, 0($t4)                # Load color at current position
+        CONVERT_COLOR($t8)             # Normalize cell color
+        CONVERT_COLOR($s0)             # Normalize expected color 
         bne $t8, $s0, reset_counter_vert_left  # If colors don't match, reset counter
         
         # We found a matching color
@@ -1266,7 +1292,8 @@
         lw     $s0, 4($sp)        # restore $s0
         lw     $ra, 0($sp)        # restore return address
         addi   $sp, $sp, 16       # deallocate stack frame
-    
+        
+        # jr $ra     
         
     check_vertical_right_pill:
         # Setup: Get pill address and color
@@ -1291,6 +1318,8 @@
         beqz $t9, vert_no_match_right # If $t5 >= 8, exit loop
     
         lw $t8, 0($t4)                # Load color at current position
+        CONVERT_COLOR($t8)             # Normalize cell color
+        CONVERT_COLOR($s0)             # Normalize expected color 
         bne $t8, $s0, reset_counter_vert_right  # If colors don't match, reset counter
         
         # We found a matching color
@@ -1334,6 +1363,7 @@
         blez   $a1, check_right_neighbor   # if board col <= 0, skip left
         addi   $t1, $a1, -1         # t1 = col - 1
         mul    $t2, $a0, 24         # t2 = row * 24
+        subi $t2, $t2, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
         add    $t2, $t2, $t1        # t2 = row*24 + (col-1)
         sll    $t2, $t2, 2          # convert to byte offset
         add    $t2, $t0, $t2        # absolute address of left neighbor
@@ -1349,6 +1379,7 @@
         bge    $a1, $t5, check_above_neighbor  # if col >= 23, skip right neighbor
         addi   $t1, $a1, 1          # t1 = col + 1
         mul    $t2, $a0, 24         # t2 = row * 24
+        subi $t2, $t2, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
         add    $t2, $t2, $t1        # t2 = row*24 + (col+1)
         sll    $t2, $t2, 2          # convert to byte offset
         add    $t2, $t0, $t2        # absolute address of right neighbor
@@ -1363,6 +1394,7 @@
         blez   $a0, check_below_neighbor   # if row <= 0, skip above neighbor
         addi   $t1, $a0, -1         # t1 = row - 1
         mul    $t2, $t1, 24         # t2 = (row-1) * 24
+        subi $t2, $t2, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
         add    $t2, $t2, $a1        # t2 = (row-1)*24 + col
         sll    $t2, $t2, 2          # convert to byte offset
         add    $t2, $t0, $t2        # absolute address of above neighbor
@@ -1378,6 +1410,7 @@
         bge    $a0, $t5, finish_update  # if row >= 32, skip below neighbor
         addi   $t1, $a0, 1          # t1 = row + 1
         mul    $t2, $t1, 24         # t2 = (row+1) * 24
+        subi $t2, $t2, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
         add    $t2, $t2, $a1        # t2 = (row+1)*24 + col
         sll    $t2, $t2, 2          # convert to byte offset
         add    $t2, $t0, $t2        # absolute address of below neighbor
@@ -1567,448 +1600,468 @@
             addi $sp, $sp, 4
             jr $ra
             
-    # Iterates 10 passes over the board (33 rows × 24 cols). For each cell:
-    #  - If the type is 0 or 1, nothing is done.
-    #  - For type 2,4,5: if the cell immediately below is empty then copy the block
-    #    one row down and clear the original.
-    #  - For type 3 (horizontal pill right–half): if not at bottom or left edge,
-    #    and both the cell directly below and the one below the left neighbor are empty,
-    #    then drop both the current cell and its left partner.
-    #  - For type 6 (vertical pill top–half): if row+2 is in bounds and the cell two rows
-    #    down is empty, then drop both this cell and the one immediately below.
-    drop_all_blocks:
-        addiu  $sp, $sp, -68
-        sw     $ra, 0($sp)
-        sw     $s0, 4($sp)
-        sw     $s1, 8($sp)
-        sw     $s2, 12($sp)
-        sw     $s3, 16($sp)
-        sw     $s4, 20($sp)
-        sw     $s5, 24($sp)
-        sw     $s6, 28($sp)
-        sw     $s7, 32($sp)
-        sw     $t0, 36($sp)
-        sw     $t1, 40($sp)
-        sw     $t2, 44($sp)
-        sw     $t3, 48($sp)
-        sw     $t4, 52($sp)
-        sw     $t5, 56($sp)
-        sw     $t6, 60($sp)
-        sw     $t7, 64($sp)
+    #------------------------------------------------------------------------------
+# drop_all_blocks:
+# This procedure makes one complete pass over the board (33 rows × 24 cols)
+# and drops blocks if possible.
+# It updates board memory and calls update_display to refresh the graphics.
+#------------------------------------------------------------------------------
+drop_all_blocks:
+    addiu  $sp, $sp, -68        # Adjust stack pointer to create a 68‐byte frame (memory update)
+    sw     $ra, 0($sp)           # Save return address (memory update)
+    sw     $s0, 4($sp)           # Save register s0 (board base pointer) (memory update)
+    sw     $s1, 8($sp)           # Save register s1 (unused in this version) (memory update)
+    sw     $s2, 12($sp)          # Save register s2 (row index) (memory update)
+    sw     $s3, 16($sp)          # Save register s3 (column index) (memory update)
+    sw     $s4, 20($sp)          # Save register s4 (unused here) (memory update)
+    sw     $s5, 24($sp)          # Save register s5 (unused here) (memory update)
+    sw     $s6, 28($sp)          # Save register s6 (unused here) (memory update)
+    sw     $s7, 32($sp)          # Save register s7 (unused here) (memory update)
+    sw     $t0, 36($sp)          # Save register t0 (used for computing cell address) (memory update)
+    sw     $t1, 40($sp)          # Save register t1 (used for cell type) (memory update)
+    sw     $t2, 44($sp)          # Save register t2 (general purpose) (memory update)
+    sw     $t3, 48($sp)          # Save register t3 (general purpose) (memory update)
+    sw     $t4, 52($sp)          # Save register t4 (destination cell address, etc.) (memory update)
+    sw     $t5, 56($sp)          # Save register t5 (general purpose) (memory update)
+    sw     $t6, 60($sp)          # Save register t6 (general purpose) (memory update)
+    sw     $t7, 64($sp)          # Save register t7 (general purpose) (memory update)
+
+    lw     $s0, ADDR_BOARD      # Load the board base address into s0
+    li     $s2, 32              # Start at the bottom row (row index 32)
+row_loop:
+    bltz   $s2, drop_all_blocks_end  # If row index < 0, we're done
+    li     $s3, 0               # Initialize column index s3 to 0 for this row
+col_loop:
+    bge    $s3, 24, next_row    # If col index >= 24, go to next row
+    # Compute cell address = board_base + ((row*24 + col)*4)
+    mul    $t0, $s2, 24         # t0 = row * 24
+    add    $t0, $t0, $s3        # t0 = (row * 24) + col
+    sll    $t0, $t0, 2          # Multiply cell index by 4 (bytes per cell)
+    add    $t0, $s0, $t0        # t0 now holds the absolute board address of cell (s2, s3)
+
+    lb     $t1, 0($t0)          # Load the cell type into t1
     
-        lw     $s0, ADDR_BOARD
-        li     $s1, 10       # Use $s1 as our pass counter (10 passes)
+    # Skip cells that are types 0,1,4,5
+    li     $t2, 0
+    beq    $t1, $t2, cell_end
+    li     $t2, 1
+    beq    $t1, $t2, cell_end
+    li     $t2, 4
+    beq    $t1, $t2, cell_end
+    li     $t2, 5
+    beq    $t1, $t2, cell_end
     
-    drop_pass_loop:
-        beqz   $s1, drop_all_blocks_end
-        addi   $s1, $s1, -1
+    # Check cell type and drop accordingly:
+    li     $t2, 2
+    # li     $t2, 1 #FOR DEBUGGING TRY VIRUSES INSTEAD
+    beq    $t1, $t2, drop_normal        # For type 2, do a normal drop (one row down)
+    li     $t2, 3
+    beq    $t1, $t2, drop_horizontal     # For type 3, drop horizontal pill right-half
+    li     $t2, 6
+    beq    $t1, $t2, drop_vertical       # For type 6, drop vertical pill top-half
+    j      cell_end                      # Otherwise, do nothing
     
-        li     $s2, 31     # For each pass, iterate rows (we process rows 31 downto 0)
-    row_loop:
-        bltz   $s2, end_of_pass   # when row index becomes negative, finish pass
-        li     $s3, 0     # Set col index = 0 for each row
+cell_end:
+    addi   $s3, $s3, 1          # Increment column index s3 
+    j      col_loop             # Repeat column loop
     
-    col_loop:
-        bge    $s3, 24, next_row  # if col >= 24, go to next row
+next_row:
+    addi   $s2, $s2, -1         # Decrement row index
+    j      row_loop             # Repeat row loop
     
-        # Compute current cell address:
-        #   offset = ((row * 24) + col) * 4, then add board base in $s0.
-        mul    $t0, $s2, 24
-        add    $t0, $t0, $s3
-        sll    $t0, $t0, 2
-        add    $t0, $s0, $t0
+drop_all_blocks_end:
+    # Restore all registers from the stack before returning
+    lw     $t7, 64($sp)         # Restore register t7 (memory update)
+    lw     $t6, 60($sp)         # Restore register t6 (memory update)
+    lw     $t5, 56($sp)         # Restore register t5 (memory update)
+    lw     $t4, 52($sp)         # Restore register t4 (memory update)
+    lw     $t3, 48($sp)         # Restore register t3 (memory update)
+    lw     $t2, 44($sp)         # Restore register t2 (memory update)
+    lw     $t1, 40($sp)         # Restore register t1 (memory update)
+    lw     $t0, 36($sp)         # Restore register t0 (memory update)
+    lw     $s7, 32($sp)         # Restore register s7 (memory update)
+    lw     $s6, 28($sp)         # Restore register s6 (memory update)
+    lw     $s5, 24($sp)         # Restore register s5 (memory update)
+    lw     $s4, 20($sp)         # Restore register s4 (memory update)
+    lw     $s3, 16($sp)         # Restore register s3 (memory update)
+    lw     $s2, 12($sp)         # Restore register s2 (memory update)
+    lw     $s1, 8($sp)          # Restore register s1 (memory update)
+    lw     $s0, 4($sp)          # Restore register s0 (memory update)
+    lw     $ra, 0($sp)          # Restore return address (memory update)
+    addiu  $sp, $sp, 68         # Restore stack pointer (memory update)
+    jr     $ra                  # Return from drop_all_blocks procedure
+
+# For a block with type 2, if the cell immediately below is empty then:
+#   1. Copy the block from the current (source) cell to the cell one row down.
+#   2. Clear the source cell.
+#   3. Extract the 24–bit color from the block data and update the display.
+drop_normal:
+    addiu  $sp, $sp, -68      
+    sw     $ra, 64($sp)         
+    sw     $s0, 60($sp)         
+    sw     $s2, 56($sp)         
+    sw     $s3, 52($sp)       
+    sw     $t0, 48($sp)         
+    sw     $t1, 44($sp)         
+    sw     $t2, 40($sp)        
+    sw     $t3, 36($sp)    
+    sw     $t4, 32($sp)       
+    sw     $t5, 28($sp)     
+    sw     $t6, 24($sp)       
+    sw     $t7, 20($sp)      
+    sw     $t8, 16($sp)         
+    sw     $t9, 12($sp)          
+    sw     $a0, 8($sp)        
+    sw     $a1, 4($sp)        
+    sw     $a2, 0($sp)         
     
-        # Load cell type (stored as the first byte)
-        lb     $t1, 0($t0)
+    # Compute destination address for one row down:
+    addi   $t3, $s2, 1          # New row = s2 + 1 (memory update)
+    mul    $t4, $t3, 24         # t4 = (s2+1) * 24 (memory calculation)
+    # subi $t4, $t4, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
+    add    $t4, $t4, $s3        # t4 = (s2+1)*24 + s3 (memory calculation)
+    sll    $t4, $t4, 2          # Multiply by 4 for byte offset (memory calculation)
+    add    $t4, $s0, $t4        # Destination cell address (memory update)
     
-        # If type is 0 or 1, do nothing.
-        li     $t2, 0
-        beq    $t1, $t2, cell_end
-        li     $t2, 1
-        beq    $t1, $t2, cell_end
+    # Check if the destination cell is empty:
+    lb     $t5, 0($t4)          # Load destination cell type (memory read)
     
-        # For types 2, 4, and 5: drop normally.
-        li     $t2, 2
-        beq    $t1, $t2, drop_normal
-        li     $t2, 4
-        beq    $t1, $t2, drop_normal
-        li     $t2, 5
-        beq    $t1, $t2, drop_normal
+    # # Print the destination cell type: FOR DEBUGGING
+    # li     $v0, 1               # Syscall code for printing an integer
+    # move   $a0, $t4            # Move the destination cell type into $a0
+    # syscall                    # Print the integer value
+    # li     $v0, 1               # Syscall code for printing an integer
+    # move   $a0, $s2            # Move the destination cell type into $a0
+    # syscall                    # Print the integer value
+    # li     $v0, 1               # Syscall code for printing an integer
+    # move   $a0, $s3            # Move the destination cell type into $a0
+    # syscall                    # Print the integer value
+    #
     
-        # For type 3 (horizontal pill, right half)
-        li     $t2, 3
-        beq    $t1, $t2, drop_horizontal
+    li     $t6, 0               # t6 = 0 (empty indicator)
+    bne    $t5, $t6, drop_normal_end  # If destination is not empty, skip drop
     
-        # For type 6 (vertical pill, top half)
-        li     $t2, 6
-        beq    $t1, $t2, drop_vertical
+    # Copy the block from source to destination:
+    lw     $t7, 0($t0)          # Load block data from source cell (memory read)
+    sw     $t7, 0($t4)          # Write block data to destination cell (memory update)
+    sw     $zero, 0($t0)        # Clear source cell by writing 0 (memory update)
     
-        j      cell_end   # If type not handled, do nothing
+    # Extract the 24–bit color (data layout: [color (24 bits)|type (8 bits)]):
+    andi   $t8, $t7, 0xFFFFFF00 # Mask out the lower 8 bits (cell type) (memory computation)
+    srl    $t8, $t8, 8          # Shift right to get the proper 24–bit color (memory computation)
     
-    # drop_normal:  For types 2,4,5.
-    # If the cell is not in the bottom row, check the cell immediately below.
-    # If below is empty, move the block down one row.
-    drop_normal:
-        # Prologue: Save all registers (even temporary ones)
-        addiu  $sp, $sp, -68
-        sw     $ra, 64($sp)
-        sw     $s0, 60($sp)
-        sw     $s2, 56($sp)
-        sw     $s3, 52($sp)
-        sw     $t0, 48($sp)
-        sw     $t1, 44($sp)
-        sw     $t2, 40($sp)
-        sw     $t3, 36($sp)
-        sw     $t4, 32($sp)
-        sw     $t5, 28($sp)
-        sw     $t6, 24($sp)
-        sw     $t7, 20($sp)
-        sw     $t8, 16($sp)
-        sw     $t9, 12($sp)
-        sw     $a0, 8($sp)
-        sw     $a1, 4($sp)
-        sw     $a2, 0($sp)
+    # Update the display for the destination cell:
+    addi   $a0, $s2, 1          # Set display row to s2+1 (display update)
+    move   $a1, $s3            # Set display column to s3 (display update)
+    move   $a2, $t8            # Set display color to extracted color (display update)
+    jal    update_display       # Call update_display (updates display memory)
     
-        # If current board row ($s2) == 32, we are at the bottom.
-        li     $t2, 32
-        beq    $s2, $t2, drop_normal_end
+    # Update the display for the now-cleared source cell:
+    move   $a0, $s2            # Set display row to s2 (display update)
+    move   $a1, $s3            # Set display column to s3 (display update)
+    li     $a2, 0              # Set display color to 0 (cleared cell) (display update)
+    jal    update_display       # Call update_display
     
-        # Compute destination cell address:
-        addi   $t3, $s2, 1         # new row = s2+1
-        mul    $t4, $t3, 24        # t4 = (s2+1)*24
-        add    $t4, $t4, $s3       # t4 = (s2+1)*24 + s3
-        sll    $t4, $t4, 2         # multiply by 4 to get byte offset
-        add    $t4, $s0, $t4       # t4 = destination cell address
+drop_normal_end:
+    # Restore registers from stack:
+    lw     $a2, 0($sp)          # Restore a2 (memory update)
+    lw     $a1, 4($sp)          # Restore a1 (memory update)
+    lw     $a0, 8($sp)          # Restore a0 (memory update)
+    lw     $t9, 12($sp)         # Restore t9 (memory update)
+    lw     $t8, 16($sp)         # Restore t8 (memory update)
+    lw     $t7, 20($sp)         # Restore t7 (memory update)
+    lw     $t6, 24($sp)         # Restore t6 (memory update)
+    lw     $t5, 28($sp)         # Restore t5 (memory update)
+    lw     $t4, 32($sp)         # Restore t4 (memory update)
+    lw     $t3, 36($sp)         # Restore t3 (memory update)
+    lw     $t2, 40($sp)         # Restore t2 (memory update)
+    lw     $t1, 44($sp)         # Restore t1 (memory update)
+    lw     $t0, 48($sp)         # Restore t0 (memory update)
+    lw     $s3, 52($sp)         # Restore s3 (memory update)
+    lw     $s2, 56($sp)         # Restore s2 (memory update)
+    lw     $s0, 60($sp)         # Restore s0 (memory update)
+    lw     $ra, 64($sp)         # Restore return address (memory update)
+    addiu  $sp, $sp, 68         # Restore stack pointer (memory update)
+    jr     $ra                  # Return from drop_normal
+
+#------------------------------------------------------------------------------
+# drop_horizontal:
+# For a horizontal pill’s right–half (type 3), if not on the bottom row,
+# and if both cells below (right half and its left partner) are empty,
+# then drop the pill (move both halves) and update the display.
+#------------------------------------------------------------------------------
+drop_horizontal:
+    addiu  $sp, $sp, -68         # Create stack frame (memory update)
+    sw     $ra, 64($sp)           # Save return address (memory update)
+    sw     $s0, 60($sp)           # Save board base pointer (s0) (memory update)
+    sw     $s2, 56($sp)           # Save current row index (s2) (memory update)
+    sw     $s3, 52($sp)           # Save current column index (s3) (memory update)
+    sw     $t0, 48($sp)           # Save current cell address (memory update)
+    sw     $t1, 44($sp)           # Save cell type (memory update)
+    sw     $t2, 40($sp)           # Save t2 (general purpose) (memory update)
+    sw     $t3, 36($sp)           # Save t3 (general purpose) (memory update)
+    sw     $t4, 32($sp)           # Save t4 (destination address for right half) (memory update)
+    sw     $t5, 28($sp)           # Save t5 (destination address for left half) (memory update)
+    sw     $t6, 24($sp)           # Save t6 (general purpose) (memory update)
+    sw     $t7, 20($sp)           # Save t7 (general purpose) (memory update)
+    sw     $t8, 16($sp)           # Save t8 (general purpose) (memory update)
+    sw     $t9, 12($sp)           # Save t9 (general purpose) (memory update)
+    sw     $a0, 8($sp)            # Save display parameter a0 (memory update)
+    sw     $a1, 4($sp)            # Save display parameter a1 (memory update)
+    sw     $a2, 0($sp)            # Save display parameter a2 (memory update)
     
-        # Check that destination is empty:
-        lb     $t5, 0($t4)
-        li     $t6, 0
-        bne    $t5, $t6, drop_normal_end
+    li     $t2, 32               # Check if current row equals 32 (bottom row)
+    beq    $s2, $t2, drop_horizontal_end  # If on bottom row, cannot drop – exit
     
-        # Copy the block: load the source cell (at address in $t0)
-        lw     $t7, 0($t0)
-        sw     $t7, 0($t4)
-        # Clear the source cell:
-        sw     $zero, 0($t0)
+    # Compute destination for right half: (s2+1, s3)
+    addi   $t3, $s2, 1          # New row for right half = s2 + 1 (memory update)
+    mul    $t4, $t3, 24         # t4 = (s2+1) * 24 (memory calculation)
+    # subi $t4, $t4, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
+    add    $t4, $t4, $s3        # t4 = (s2+1)*24 + s3 (memory calculation)
+    sll    $t4, $t4, 2          # Multiply by 4 for byte offset (memory calculation)
+    add    $t4, $s0, $t4        # Destination address for right half (memory update)
     
-        # Extract the 24–bit color (the cell’s word is [color (24 bits) | type (8 bits)])
-        andi   $t8, $t7, 0xFFFFFF00  # mask out the type byte
-        srl    $t8, $t8, 8         # now $t8 holds the proper 24–bit color
+    # Compute destination for left half: (s2+1, s3-1)
+    addi   $t7, $s2, 1          # New row for left half = s2 + 1 (memory update)
+    mul    $t5, $t7, 24         # t5 = (s2+1) * 24 (memory calculation)
+    # subi $t5, $t5, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
+    addi   $t6, $s3, -1         # New column for left half = s3 - 1 (memory update)
+    add    $t5, $t5, $t6        # t5 = (s2+1)*24 + (s3-1) (memory calculation)
+    sll    $t5, $t5, 2          # Multiply by 4 for byte offset (memory calculation)
+    add    $t5, $s0, $t5        # Destination address for left half (memory update)
     
-        # Update the display for the new (destination) cell:
-        addi   $a0, $s2, 1         # board row = s2+1
-        move   $a1, $s3            # board col stays the same
-        move   $a2, $t8            # the extracted color
-        jal    update_display
+    # Check that both destination cells are empty:
+    lb     $t8, 0($t4)          # Load cell type at destination right half (memory read)
+    li     $t9, 0               # t9 = 0 (empty cell indicator)
+    bne    $t8, $t9, drop_horizontal_end  # If right destination is not empty, exit
+    lb     $t8, 0($t5)          # Load cell type at destination left half (memory read)
+    bne    $t8, $t9, drop_horizontal_end  # If left destination is not empty, exit
     
-        # Update the display for the source cell (now cleared):
-        move   $a0, $s2            # board row = s2 (source)
-        move   $a1, $s3
-        li     $a2, 0
-        jal    update_display
+    # Get block data for right half from the current cell:
+    lw     $t6, 0($t0)          # Load block data from current right half (memory read)
     
-    drop_normal_end:
-        # Epilogue: Restore registers and return.
-        lw     $a2, 0($sp)
-        lw     $a1, 4($sp)
-        lw     $a0, 8($sp)
-        lw     $t9, 12($sp)
-        lw     $t8, 16($sp)
-        lw     $t7, 20($sp)
-        lw     $t6, 24($sp)
-        lw     $t5, 28($sp)
-        lw     $t4, 32($sp)
-        lw     $t3, 36($sp)
-        lw     $t2, 40($sp)
-        lw     $t1, 44($sp)
-        lw     $t0, 48($sp)
-        lw     $s3, 52($sp)
-        lw     $s2, 56($sp)
-        lw     $s0, 60($sp)
-        lw     $ra, 64($sp)
-        addiu  $sp, $sp, 68
-        jr     $ra
+    # Compute address of left half partner (cell at (s2, s3-1)):
+    mul    $t8, $s2, 24         # t8 = s2 * 24 (memory calculation)
+    addi   $t7, $s3, -1         # t7 = s3 - 1 (memory update)
+    # subi $t7, $t7, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
+    add    $t8, $t8, $t7        # t8 = s2*24 + (s3-1) (memory calculation)
+    sll    $t8, $t8, 2          # Multiply by 4 for byte offset (memory calculation)
+    add    $t8, $s0, $t8        # Address of left half partner (memory update)
+    lw     $t7, 0($t8)          # Load block data from left half partner (memory read)
     
-    # drop_horizontal: For type 3 (horizontal pill right–half).
-    # Ensure not on bottom row and not in leftmost column.
-    # Check that both the cell directly below (for right half)
-    # and the cell below the left partner are empty. Then drop both.
-    drop_horizontal:
-        # Prologue: Save all registers
-        addiu  $sp, $sp, -68
-        sw     $ra, 64($sp)
-        sw     $s0, 60($sp)
-        sw     $s2, 56($sp)
-        sw     $s3, 52($sp)
-        sw     $t0, 48($sp)
-        sw     $t1, 44($sp)
-        sw     $t2, 40($sp)
-        sw     $t3, 36($sp)
-        sw     $t4, 32($sp)
-        sw     $t5, 28($sp)
-        sw     $t6, 24($sp)
-        sw     $t7, 20($sp)
-        sw     $t8, 16($sp)
-        sw     $t9, 12($sp)
-        sw     $a0, 8($sp)
-        sw     $a1, 4($sp)
-        sw     $a2, 0($sp)
+    # Extract 24–bit colors for each half:
+    andi   $t2, $t6, 0xFFFFFF00 # Mask out type from right half data to get color (memory computation)
+    srl    $t2, $t2, 8          # Shift right to adjust right half color (memory computation)
+    andi   $t3, $t7, 0xFFFFFF00 # Mask out type from left half data (memory computation)
+    srl    $t3, $t3, 8          # Shift right to adjust left half color (memory computation)
     
-        # Must not be on bottom row, and there must be a left partner (col ≠ 0)
-        li     $t2, 32
-        beq    $s2, $t2, drop_horizontal_end
-        beqz   $s3, drop_horizontal_end
+    # Move the blocks to their destination cells:
+    sw     $t6, 0($t4)          # Write right half block to destination (memory update)
+    sw     $t7, 0($t5)          # Write left half block to destination (memory update)
+    sw     $zero, 0($t0)        # Clear original right half cell (memory update)
+    sw     $zero, 0($t8)        # Clear original left half cell (memory update)
     
-        # Compute destination for right half: (s2+1, s3)
-        addi   $t3, $s2, 1
-        mul    $t4, $t3, 24
-        add    $t4, $t4, $s3
-        sll    $t4, $t4, 2
-        add    $t4, $s0, $t4    # $t4 = dest address for right half
+    # Update display for destination right half:
+    addi   $a0, $s2, 1          # Set display row to s2+1 (display update)
+    move   $a1, $s3            # Set display column to s3 (display update)
+    move   $a2, $t2            # Set display color to right half color (display update)
+    jal    update_display       # Call update_display (updates display memory)
     
-        # Compute destination for left half: (s2+1, s3-1)
-        addi   $t7, $s2, 1       # new row for left half
-        mul    $t5, $t7, 24
-        addi   $t6, $s3, -1      # new col for left half = s3-1
-        add    $t5, $t5, $t6
-        sll    $t5, $t5, 2
-        add    $t5, $s0, $t5    # $t5 = dest address for left half
+    # Update display for destination left half:
+    addi   $a0, $s2, 1          # Set display row to s2+1 (display update)
+    addi   $a1, $s3, -1         # Set display column to s3-1 (display update)
+    move   $a2, $t3            # Set display color to left half color (display update)
+    jal    update_display       # Call update_display
     
-        # Check that both destination cells are empty.
-        lb     $t8, 0($t4)
-        li     $t9, 0
-        bne    $t8, $t9, drop_horizontal_end
-        lb     $t8, 0($t5)
-        bne    $t8, $t9, drop_horizontal_end
+    # Update display for cleared original right half cell:
+    move   $a0, $s2            # Set display row to s2 (display update)
+    move   $a1, $s3            # Set display column to s3 (display update)
+    li     $a2, 0              # Set display color to 0 (cleared cell) (display update)
+    jal    update_display       # Call update_display
     
-        # Get current block data:
-        lw     $t6, 0($t0)       # current right half from cell at address in $t0
-        # Compute current left partner address:
-        mul    $t8, $s2, 24
-        addi   $t7, $s3, -1
-        add    $t8, $t8, $t7
-        sll    $t8, $t8, 2
-        add    $t8, $s0, $t8     # $t8 = current left partner address
-        lw     $t7, 0($t8)       # current left half data
+    # Update display for cleared original left half cell:
+    move   $a0, $s2            # Set display row to s2 (display update)
+    addi   $a1, $s3, -1         # Set display column to s3-1 (display update)
+    li     $a2, 0              # Set display color to 0 (display update)
+    jal    update_display       # Call update_display
     
-        # Extract 24–bit colors:
-        andi   $t2, $t6, 0xFFFFFF00
-        srl    $t2, $t2, 8       # $t2 now holds right half color
-        andi   $t3, $t7, 0xFFFFFF00
-        srl    $t3, $t3, 8       # $t3 now holds left half color
+drop_horizontal_end:
+    # Restore registers from stack:
+    lw     $a2, 0($sp)          # Restore a2 (memory update)
+    lw     $a1, 4($sp)          # Restore a1 (memory update)
+    lw     $a0, 8($sp)          # Restore a0 (memory update)
+    lw     $t9, 12($sp)         # Restore t9 (memory update)
+    lw     $t8, 16($sp)         # Restore t8 (memory update)
+    lw     $t7, 20($sp)         # Restore t7 (memory update)
+    lw     $t6, 24($sp)         # Restore t6 (memory update)
+    lw     $t5, 28($sp)         # Restore t5 (memory update)
+    lw     $t4, 32($sp)         # Restore t4 (memory update)
+    lw     $t3, 36($sp)         # Restore t3 (memory update)
+    lw     $t2, 40($sp)         # Restore t2 (memory update)
+    lw     $t1, 44($sp)         # Restore t1 (memory update)
+    lw     $t0, 48($sp)         # Restore t0 (memory update)
+    lw     $s3, 52($sp)         # Restore s3 (memory update)
+    lw     $s2, 56($sp)         # Restore s2 (memory update)
+    lw     $s0, 60($sp)         # Restore s0 (memory update)
+    lw     $ra, 64($sp)         # Restore return address (memory update)
+    addiu  $sp, $sp, 68         # Restore stack pointer (memory update)
+    jr     $ra                  # Return from drop_horizontal
+
+#------------------------------------------------------------------------------
+# drop_vertical:
+# For a vertical pill’s top–half (type 6), if the destination cell for the bottom
+# half (i.e. at row+2) is empty then:
+#   1. Move the top half to (s2+1, s3) and the bottom half from (s2+1, s3) to (s2+2, s3).
+#   2. Clear the original cells.
+#   3. Update the display accordingly.
+#------------------------------------------------------------------------------
+drop_vertical:
+    addiu  $sp, $sp, -68        # Create stack frame (memory update)
+    sw     $ra, 64($sp)          # Save return address (memory update)
+    sw     $s0, 60($sp)          # Save board base pointer s0 (memory update)
+    sw     $s2, 56($sp)          # Save current row index s2 (memory update)
+    sw     $s3, 52($sp)          # Save current column index s3 (memory update)
+    sw     $t0, 48($sp)          # Save current top half cell address (memory update)
+    sw     $t1, 44($sp)          # Save cell type (memory update)
+    sw     $t2, 40($sp)          # Save t2 (general purpose) (memory update)
+    sw     $t3, 36($sp)          # Save t3 (general purpose) (memory update)
+    sw     $t4, 32($sp)          # Save t4 (destination address for top half) (memory update)
+    sw     $t5, 28($sp)          # Save t5 (destination address for bottom half) (memory update)
+    sw     $t6, 24($sp)          # Save t6 (general purpose) (memory update)
+    sw     $t7, 20($sp)          # Save t7 (general purpose) (memory update)
+    sw     $t8, 16($sp)          # Save t8 (general purpose) (memory update)
+    sw     $t9, 12($sp)          # Save t9 (general purpose) (memory update)
+    sw     $a0, 8($sp)           # Save display parameter a0 (memory update)
+    sw     $a1, 4($sp)           # Save display parameter a1 (memory update)
+    sw     $a2, 0($sp)           # Save display parameter a2 (memory update)
     
-        # Move the blocks:
-        sw     $t6, 0($t4)       # copy right half to destination
-        sw     $t7, 0($t5)       # copy left half to destination
-        sw     $zero, 0($t0)     # clear original right half cell
-        sw     $zero, 0($t8)     # clear original left half cell
+    li     $t2, 31              # Check if we’re too close to the bottom: vertical drop requires s2 < 31
+    bge    $s2, $t2, drop_vertical_end  # If s2 >= 31, cannot drop vertically – exit
     
-        # Update display for destination right half:
-        addi   $a0, $s2, 1       # new row = s2+1
-        move   $a1, $s3
-        move   $a2, $t2         # color for right half
-        jal    update_display
+    # Compute destination for top half: (s2+1, s3)
+    addi   $t3, $s2, 1          # New row for top half = s2 + 1 (memory update)
+    mul    $t4, $t3, 24         # t4 = (s2+1) * 24 (memory calculation)
+    # subi $t4, $t4, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
+    add    $t4, $t4, $s3        # t4 = (s2+1)*24 + s3 (memory calculation)
+    sll    $t4, $t4, 2          # Multiply by 4 for byte offset (memory calculation)
+    add    $t4, $s0, $t4        # Destination address for top half (memory update)
     
-        # Update display for destination left half:
-        addi   $a0, $s2, 1
-        addi   $a1, $s3, -1
-        move   $a2, $t3         # color for left half
-        jal    update_display
+    # Compute destination for bottom half: (s2+2, s3)
+    addi   $t5, $s2, 2          # New row for bottom half = s2 + 2 (memory update)
+    mul    $t6, $t5, 24         # t6 = (s2+2) * 24 (memory calculation)
+    # subi $t6, $t6, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
+    add    $t6, $t6, $s3        # t6 = (s2+2)*24 + s3 (memory calculation)
+    sll    $t6, $t6, 2          # Multiply by 4 for byte offset (memory calculation)
+    add    $t6, $s0, $t6        # Destination address for bottom half (memory update)
     
-        # Update display for cleared source cells:
-        move   $a0, $s2         # source right half cell (s2, s3)
-        move   $a1, $s3
-        li     $a2, 0
-        jal    update_display
+    # Check that the destination for the bottom half is empty:
+    lb     $t7, 0($t6)          # Load cell type from destination bottom half (memory read)
+    li     $t8, 0               # t8 = 0 (empty indicator)
+    bne    $t7, $t8, drop_vertical_end  # If bottom destination is not empty, exit
     
-        move   $a0, $s2         # source left half cell (s2, s3-1)
-        addi   $a1, $s3, -1
-        li     $a2, 0
-        jal    update_display
+    # Move the top half:
+    lw     $t9, 0($t0)          # Load block data from current top half cell (memory read)
+    sw     $t9, 0($t4)          # Write block data to destination top half (memory update)
     
-    drop_horizontal_end:
-        # Epilogue: Restore all registers and return.
-        lw     $a2, 0($sp)
-        lw     $a1, 4($sp)
-        lw     $a0, 8($sp)
-        lw     $t9, 12($sp)
-        lw     $t8, 16($sp)
-        lw     $t7, 20($sp)
-        lw     $t6, 24($sp)
-        lw     $t5, 28($sp)
-        lw     $t4, 32($sp)
-        lw     $t3, 36($sp)
-        lw     $t2, 40($sp)
-        lw     $t1, 44($sp)
-        lw     $t0, 48($sp)
-        lw     $s3, 52($sp)
-        lw     $s2, 56($sp)
-        lw     $s0, 60($sp)
-        lw     $ra, 64($sp)
-        addiu  $sp, $sp, 68
-        jr     $ra
+    # Extract the top half color:
+    andi   $t2, $t9, 0xFFFFFF00 # Mask out type to extract top half color (memory computation)
+    srl    $t2, $t2, 8          # Adjust top half color (memory computation)
     
-    # For type 6 (vertical pill top–half).
-    # Check that the destination for the bottom half (row+2) is empty.
-    drop_vertical:
-        # Prologue: Save all registers.
-        addiu  $sp, $sp, -68
-        sw     $ra, 64($sp)
-        sw     $s0, 60($sp)
-        sw     $s2, 56($sp)
-        sw     $s3, 52($sp)
-        sw     $t0, 48($sp)
-        sw     $t1, 44($sp)
-        sw     $t2, 40($sp)
-        sw     $t3, 36($sp)
-        sw     $t4, 32($sp)
-        sw     $t5, 28($sp)
-        sw     $t6, 24($sp)
-        sw     $t7, 20($sp)
-        sw     $t8, 16($sp)
-        sw     $t9, 12($sp)
-        sw     $a0, 8($sp)
-        sw     $a1, 4($sp)
-        sw     $a2, 0($sp)
+    # Compute the source address for the bottom half:
+    addi   $t7, $s2, 1          # New row for bottom half source = s2 + 1 (memory update)
+    mul    $t7, $t7, 24         # t7 = (s2+1) * 24 (memory calculation)
+    # subi $t7, $t7, 1           # NEW BECAUSE IT WAS OFF BY ONE MAYBE
+    add    $t7, $t7, $s3        # t7 = (s2+1)*24 + s3 (memory calculation)
+    sll    $t7, $t7, 2          # Multiply by 4 for byte offset (memory calculation)
+    add    $t7, $s0, $t7        # Source address for bottom half (memory update)
     
-        # For a vertical drop, we require that s2 < 31.
-        li     $t2, 31
-        bge    $s2, $t2, drop_vertical_end
+    # Move the bottom half:
+    lw     $t9, 0($t7)          # Load block data from current bottom half cell (memory read)
+    sw     $t9, 0($t6)          # Write block data to destination bottom half (memory update)
     
-        # Compute destination for top half: (s2+1, s3)
-        addi   $t3, $s2, 1         # row+1
-        mul    $t4, $t3, 24
-        add    $t4, $t4, $s3       # (s2+1)*24 + s3
-        sll    $t4, $t4, 2
-        add    $t4, $s0, $t4       # destination address for top half in $t4
+    # Extract the bottom half color:
+    andi   $t3, $t9, 0xFFFFFF00 # Mask out type to extract bottom half color (memory computation)
+    srl    $t3, $t3, 8          # Adjust bottom half color (memory computation)
     
-        # Compute destination for bottom half: (s2+2, s3)
-        addi   $t5, $s2, 2         # row+2
-        mul    $t6, $t5, 24
-        add    $t6, $t6, $s3       # (s2+2)*24 + s3
-        sll    $t6, $t6, 2
-        add    $t6, $s0, $t6       # destination address for bottom half in $t6
+    # Clear the original source cells:
+    sw     $zero, 0($t0)        # Clear original top half cell (memory update)
+    sw     $zero, 0($t7)        # Clear original bottom half cell (memory update)
     
-        # Check that the destination bottom cell is empty.
-        lb     $t7, 0($t6)
-        li     $t8, 0
-        bne    $t7, $t8, drop_vertical_end
+    # Update display for new top half:
+    addi   $a0, $s2, 1          # Set display row to s2+1 (display update)
+    move   $a1, $s3            # Set display column to s3 (display update)
+    move   $a2, $t2            # Set display color to top half color (display update)
+    jal    update_display       # Call update_display (updates display memory)
     
-        # Move the top half:
-        lw     $t9, 0($t0)         # load the top half from current cell (at [s2, s3])
-        sw     $t9, 0($t4)         # store to destination top half
+    # Update display for new bottom half:
+    addi   $a0, $s2, 2          # Set display row to s2+2 (display update)
+    move   $a1, $s3            # Set display column to s3 (display update)
+    move   $a2, $t3            # Set display color to bottom half color (display update)
+    jal    update_display       # Call update_display
     
-        # Extract top half color:
-        andi   $t2, $t9, 0xFFFFFF00
-        srl    $t2, $t2, 8         # $t2 now holds the top half’s 24–bit color
+    # Update display for cleared original top half:
+    move   $a0, $s2            # Set display row to s2 (display update)
+    move   $a1, $s3            # Set display column to s3 (display update)
+    li     $a2, 0              # Set display color to 0 (cleared cell) (display update)
+    jal    update_display       # Call update_display
     
-        # Compute source for bottom half: it is the cell immediately below the top half, i.e. (s2+1, s3)
-        addi   $t7, $s2, 1
-        mul    $t7, $t7, 24
-        add    $t7, $t7, $s3
-        sll    $t7, $t7, 2
-        add    $t7, $s0, $t7       # $t7 is now the source address for bottom half
+    # Update display for cleared original bottom half:
+    addi   $a0, $s2, 1          # Set display row to s2+1 (display update)
+    move   $a1, $s3            # Set display column to s3 (display update)
+    li     $a2, 0              # Set display color to 0 (display update)
+    jal    update_display       # Call update_display
     
-        # Move the bottom half:
-        lw     $t9, 0($t7)         # load bottom half from its source cell
-        sw     $t9, 0($t6)         # store to destination bottom half
+drop_vertical_end:
+    # Restore registers from stack:
+    lw     $a2, 0($sp)          # Restore a2 (memory update)
+    lw     $a1, 4($sp)          # Restore a1 (memory update)
+    lw     $a0, 8($sp)          # Restore a0 (memory update)
+    lw     $t9, 12($sp)         # Restore t9 (memory update)
+    lw     $t8, 16($sp)         # Restore t8 (memory update)
+    lw     $t7, 20($sp)         # Restore t7 (memory update)
+    lw     $t6, 24($sp)         # Restore t6 (memory update)
+    lw     $t5, 28($sp)         # Restore t5 (memory update)
+    lw     $t4, 32($sp)         # Restore t4 (memory update)
+    lw     $t3, 36($sp)         # Restore t3 (memory update)
+    lw     $t2, 40($sp)         # Restore t2 (memory update)
+    lw     $t1, 44($sp)         # Restore t1 (memory update)
+    lw     $t0, 48($sp)         # Restore t0 (memory update)
+    lw     $s3, 52($sp)         # Restore s3 (memory update)
+    lw     $s2, 56($sp)         # Restore s2 (memory update)
+    lw     $s0, 60($sp)         # Restore s0 (memory update)
+    lw     $ra, 64($sp)         # Restore return address (memory update)
+    addiu  $sp, $sp, 68         # Restore stack pointer (memory update)
+    jr     $ra                  # Return from drop_vertical
+
+#------------------------------------------------------------------------------
+# update_display:
+# This procedure updates the display memory for a given board cell.
+# Input:
+#   a0: board row
+#   a1: board column
+#   a2: 24–bit color to display
+#------------------------------------------------------------------------------
+update_display:
+    addi   $sp, $sp, -16       
+    sw     $t0, 0($sp)
+    sw     $t1, 4($sp)
+    sw     $t2, 8($sp)
+    sw     $t3, 12($sp)
     
-        # Extract bottom half color:
-        andi   $t3, $t9, 0xFFFFFF00
-        srl    $t3, $t3, 8         # $t3 now holds the bottom half’s 24–bit color
+    lw     $t0, ADDR_DSPL       # Load base address of display memory into t0 (memory read)
+    addi   $t1, $a0, 7          # Calculate display row = board row + 7 (memory calculation)
+    li     $t2, 64             # Load constant 64 (number of display columns) (memory load)
+    mul    $t1, $t1, $t2        # Multiply display row by 64 to get row offset (memory calculation)
+    # addi   $t3, $a1, 3          # Calculate display column = board col + 3 (memory calculation)
+    addi   $t3, $a1, 4
+    add    $t1, $t1, $t3        # Add column offset to row offset (memory calculation)
+    sll    $t1, $t1, 2          # Multiply by 4 to get byte offset (memory calculation)
+    add    $t1, $t0, $t1        # Compute final display memory address (memory update)
+    sw     $a2, 0($t1)          # Update display memory with the new color (display update)
     
-        # Clear the original source cells:
-        sw     $zero, 0($t0)       # clear top half cell at [s2, s3]
-        sw     $zero, 0($t7)       # clear bottom half cell at [s2+1, s3]
-    
-        # Update display for the new top half:
-        addi   $a0, $s2, 1         # new board row = s2+1
-        move   $a1, $s3
-        move   $a2, $t2            # color from top half
-        jal    update_display
-    
-        # Update display for the new bottom half:
-        addi   $a0, $s2, 2         # new board row = s2+2
-        move   $a1, $s3
-        move   $a2, $t3            # color from bottom half
-        jal    update_display
-    
-        # Update display for the cleared old top half:
-        move   $a0, $s2           # row s2 (old top half)
-        move   $a1, $s3
-        li     $a2, 0
-        jal    update_display
-    
-        # Update display for the cleared old bottom half:
-        addi   $a0, $s2, 1         # row s2+1 (old bottom half)
-        move   $a1, $s3
-        li     $a2, 0
-        jal    update_display
-    
-    drop_vertical_end:
-        # Epilogue: Restore all registers and return.
-        lw     $a2, 0($sp)
-        lw     $a1, 4($sp)
-        lw     $a0, 8($sp)
-        lw     $t9, 12($sp)
-        lw     $t8, 16($sp)
-        lw     $t7, 20($sp)
-        lw     $t6, 24($sp)
-        lw     $t5, 28($sp)
-        lw     $t4, 32($sp)
-        lw     $t3, 36($sp)
-        lw     $t2, 40($sp)
-        lw     $t1, 44($sp)
-        lw     $t0, 48($sp)
-        lw     $s3, 52($sp)
-        lw     $s2, 56($sp)
-        lw     $s0, 60($sp)
-        lw     $ra, 64($sp)
-        addiu  $sp, $sp, 68
-        jr     $ra
-    
-    cell_end:
-        addi   $s3, $s3, 1        # Increment col index
-        j      col_loop
-    
-    next_row:
-        addi   $s2, $s2, -1       # Decrement row index
-        j      row_loop
-    
-    end_of_pass:
-        j      drop_pass_loop
-    
-    drop_all_blocks_end:
-        # Restore registers.
-        lw     $t7, 64($sp)
-        lw     $t6, 60($sp)
-        lw     $t5, 56($sp)
-        lw     $t4, 52($sp)
-        lw     $t3, 48($sp)
-        lw     $t2, 44($sp)
-        lw     $t1, 40($sp)
-        lw     $t0, 36($sp)
-        lw     $s7, 32($sp)
-        lw     $s6, 28($sp)
-        lw     $s5, 24($sp)
-        lw     $s4, 20($sp)
-        lw     $s3, 16($sp)
-        lw     $s2, 12($sp)
-        lw     $s1, 8($sp)
-        lw     $s0, 4($sp)
-        lw     $ra, 0($sp)
-        addiu  $sp, $sp, 68
-        jr     $ra
-    
-    update_display:
-        # Save registers if needed (only using temporary $t registers here)
-        lw   $t0, ADDR_DSPL       # $t0 = display base address
-        addi $t1, $a0, 7          # display row = board row + 7
-        li   $t2, 64
-        mul  $t1, $t1, $t2        # $t1 = display row * 64
-        addi $t3, $a1, 3          # display col = board col + 3
-        add  $t1, $t1, $t3       # $t1 = (display row * 64) + display col
-        sll  $t1, $t1, 2         # multiply by 4 to get byte offset
-        add  $t1, $t0, $t1       # final display address
-        sw   $a2, 0($t1)         # update pixel with color in $a2
-        jr   $ra
+    lw     $t0, 0($sp)
+    lw     $t1, 4($sp)
+    lw     $t2, 8($sp)
+    lw     $t3, 12($sp)
+    addi   $sp, $sp, 16         # Deallocate stack space
+    jr     $ra                  # Return from update_display
