@@ -28,6 +28,43 @@
     # The address the game board starts at.
     ADDR_BOARD:
         .word 0x11000000
+#adding music 
+.align 2  # Ensure memory alignment
+frame_counter:     .word 0     # Current frame count
+melody_index:      .word 0     # Current position in melody
+bass_index:        .word 0  
+melody_active:     .word 1   # Current position in bass line
+theme_song_speed:  .word 12    # Frames between notes
+bass_active:       .word 0
+intro_length:      .word 16
+.align 2
+melody_length:     .word 120
+melody:   
+         .word 70, 71, 70, 71, 69, 67, 67, 69, 
+        .word 70, 71, 69, 67, 67, -2, -1
+        .word 70, 71, 70, 71, 69, 67, 67, 69,
+        .word 59, -2, 60, -2, 61, -2, 62, -2
+        .word 70, 71, 70, 71, 69, 67, 67, 69, 
+        .word 70, 71, 69, 67, 67, -2, -1
+        .word 70, 71, 70, 71, 69, 67, 67, 69,
+        .word 59, -2, 60, -2, 61, -2, 62, -2
+        .word 75, 76, 75, 76, 74, 72, 72, 74
+        .word 75, 76, 74, 72, 72, -1, -2
+        .word 75, 76, 75, 76, 74, 72, 72, 74
+        .word 66, 69, 72, 74, 72, -2, 71, -2
+        .word 75, 76, 74, 72, 72, -1, -2
+        .word 75, 76, 74, 72, 72, -1, -2
+        .word 75, 76, 75, 76, 74, 72, 72, 74
+        .word 72, -2, 74, -2, 72, -2
+         
+
+# -1 is a crotchet rest
+# -2 is a semi quaver rest 
+        
+.align 2
+bass_length: .word 16
+bassline: .word 43, 43, 46, 47, 48, 47, 46, 45
+          .word 43, 43, 46, 47, 48, 47, 46, 45
     
     ##############################################################################
     # Mutable Data
@@ -86,34 +123,46 @@
         # Draw the first randomly colored pill
         jal draw_pill
         # Initialize the game
-    
+        jal init_music
+        
     game_loop:
-        # 1a. Check if key has been pressed
+    # 1a. Check if key has been pressed
         li $v0, 32 # system call for sleeping
         li $a0, 17 # sleep time is 17 milliseconds (1/60 seconds)
         syscall
-        
-        # Update gravity counter
+    
+    # Update frame counter for music
+        lw $t0, frame_counter
+        addi $t0, $t0, 1
+        sw $t0, frame_counter
+    
+    # Call music update function
+        jal update_music
+    
+    # Update gravity counter
         lw $t0, gravity_counter
         addi $t0, $t0, 1
         sw $t0, gravity_counter
-        # check if it's time to apply gravity
+    
+    # check if it's time to apply gravity
         lw $t1, gravity_interval
         blt $t0, $t1, skip_gravity
         li $t0, 0
         sw $t0, gravity_counter # reset counter
-        
-        # speed up gravity over time
+    
+    # speed up gravity over time
         lw $t2, gravity_interval       # Reload current interval
         subi $t2, $t2, 1               # Decrease interval
         li $t3, 5                 
         bge $t2, $t3, store_speed      # max speed
         li $t2, 5                    
-        store_speed:
-            sw $t2, gravity_interval       # Store updated speed
-        jal apply_gravity
     
-    skip_gravity:
+store_speed:
+    sw $t2, gravity_interval       # Store updated speed
+    jal apply_gravity
+    
+    
+skip_gravity:
         jal drop_all_blocks
         
         # 1b. Check which key has been pressed
@@ -1820,3 +1869,228 @@ drop_all_blocks:
         jr      $ra
 
  
+init_music:
+    li $t0, 0 
+    sw $t0, melody_active
+    li $t0, 1 
+    sw $t0, bass_active
+    
+    jr $ra
+
+# This is the fixed version of the update_music function:
+
+update_music:
+    addi $sp, $sp, -16
+    sw $ra, 0($sp)
+    sw $s0, 4($sp)
+    sw $s1, 8($sp)
+    sw $s2, 12($sp)
+    
+    # load_frame_counter
+    lw $s0, frame_counter
+    
+    # Check if it's time to play note
+    lw $s1, theme_song_speed
+    div $s0, $s1
+    mfhi $s2
+    bnez $s2, music_done
+    
+    # Check if melody is done and we need to reset everything
+    lw $s0, melody_index
+    lw $s1, melody_length
+    blt $s0, $s1, continue_music  # If melody index < melody length, continue normally
+    
+    # Melody is complete, reset everything to start over with bass intro
+    li $t0, 0
+    sw $t0, melody_index  # Reset melody position
+    sw $t0, bass_index    # Reset bass position
+    sw $t0, melody_active  # Turn off melody until bass intro completes again
+    j bass_only            # Jump to play bass only
+    
+continue_music:
+    # Check if we should activate melody based on bass progression
+    lw $s0, bass_index
+    lw $s1, intro_length
+    blt $s0, $s1, bass_only
+    
+    # We've passed the intro length, so ensure melody is active
+    li $t0, 1
+    sw $t0, melody_active
+    
+bass_only:
+    # Play bass note (if active)
+    lw $t0, bass_active
+    beqz $t0, check_melody
+    jal play_next_bass_note
+
+check_melody:
+    # Play melody note (if active)
+    lw $t0, melody_active
+    beqz $t0, music_done
+    jal play_next_melody_note
+    j music_done
+    
+    # Play both instruments - first bass then melody
+    
+
+    
+    
+skip_melody_check:
+    # Play bass note 
+    lw $t0, bass_active
+    beqz $t0, skip_bass
+    jal play_next_bass_note
+
+skip_bass:
+    
+    # Play melody note if active
+    lw $t0, melody_active
+    beqz $t0, skip_melody
+    jal play_next_melody_note
+    
+    
+skip_melody:
+    j music_done
+
+    
+play_next_melody_note:
+    addi $sp, $sp, -16
+    sw $ra, 0($sp)
+    sw $s0, 4($sp)
+    sw $s1, 8($sp)
+    sw $s2, 12($sp)
+    
+    lw $s0, melody_index
+    lw $s1, melody_length
+    
+    bge $s0, $s1, reset_melody
+    
+    j continue_melody
+
+    
+
+
+
+music_done:
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    addi $sp, $sp, 16
+    jr $ra
+    
+
+reset_melody:
+    li $s0, 0
+    sw $s0, melody_index
+    j continue_melody
+    
+continue_melody:
+    la $s1, melody #loads_melody_address
+    sll $s2, $s0, 2 #multiply 4 
+    
+    add $s2, $s1, $s2 #address of note 
+    
+    lw $a0, 0($s2) #value of note
+    
+    li $t0, -1
+    beq $a0, $t0, skip_note_crotchet   # If it's a rest, skip playing
+    li $t0, -2
+    beq $a0, $t0, skip_note_quaver   # If it's a rest, skip playing
+    
+    li $v0, 31 
+    li $a1, 180
+    li $a2, 12 #piano
+    li $a3, 70
+    
+    syscall
+    
+    addi $s0, $s0, 1      # Increment the index
+    sw $s0, melody_index  # Store updated index
+    
+    #reset everything
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    addi $sp, $sp, 16
+    jr $ra
+    
+    
+    
+skip_note_crotchet:
+    li $v0, 32                # Sleep syscall
+    li $a0, 180               # Sleep for the same duration as a note
+    syscall
+    j return_rest
+
+skip_note_quaver:
+    li $v0, 32                # Sleep syscall
+    li $a0, 45               # Sleep for the same duration as a note
+    syscall
+    j return_rest
+   
+    
+return_rest:
+    addi $s0, $s0, 1
+    sw $s0, melody_index  #increments index as well
+    
+    # Return from function
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    addi $sp, $sp, 16
+    jr $ra
+  
+play_next_bass_note:
+    addi $sp, $sp, -16
+    sw $ra, 0($sp)
+    sw $s0, 4($sp)
+    sw $s1, 8($sp)
+    sw $s2, 12($sp)
+    
+    # Load current index
+    lw $s0, bass_index
+    lw $s1, bass_length
+    
+    # Check if we need to loop back
+    bge $s0, $s1, reset_bass
+    j continue_bass
+    
+reset_bass:
+    li $s0, 0
+    sw $s0, bass_index
+    
+continue_bass:
+    la $s1, bassline #loads_melody_address
+    sll $s2, $s0, 2 #multiply 4 
+    
+    add $s2, $s1, $s2 #address of note 
+    
+    lw $a0, 0($s2) #value of note
+    
+    li $t0, -1
+    beq $a0, $t0, skip_note_crotchet   # If it's a rest, skip playing
+    li $t0, -2
+    beq $a0, $t0, skip_note_quaver   # If it's a rest, skip playing
+    
+    li $v0, 31 
+    li $a1, 180
+    li $a2, 33 #bass
+    li $a3, 50
+    
+    syscall
+    
+    addi $s0, $s0, 1      # Increment the index
+    sw $s0, bass_index  # Store updated index
+    
+    #reset everything
+    lw $ra, 0($sp)
+    lw $s0, 4($sp)
+    lw $s1, 8($sp)
+    lw $s2, 12($sp)
+    addi $sp, $sp, 16
+    jr $ra
+    
+    
