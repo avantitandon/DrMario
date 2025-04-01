@@ -65,6 +65,25 @@ melody:
 bass_length: .word 16
 bassline: .word 43, 43, 46, 47, 48, 47, 46, 45
           .word 43, 43, 46, 47, 48, 47, 46, 45
+          
+          
+# Sound effect parameters
+key_sound_pitch_w:   .word 60  # for w 
+key_sound_duration: .word 50 # milliseconds
+key_sound_instrument: .word 11 # vibaraphone
+key_sound_volume:  .word 75  
+
+
+key_sound_pitch_a:   .word 65  
+key_sound_pitch_d:   .word 70 
+key_sound_pitch_four:   .word 70 
+
+key_sound_instrument2: .word 10 # music box
+
+key_sound_instrument3: .word 17 #organ
+
+
+
     
     ##############################################################################
     # Mutable Data
@@ -227,6 +246,7 @@ skip_gravity:
     	
     handle_pause:
         # draw pause message
+        jal play_key_sound_paused
         jal display_paused_message
         pause_loop:
             li $v0, 32           # system call for sleeping
@@ -411,12 +431,14 @@ skip_gravity:
         jr $ra                 # Return
     
     check_orientation_w:
+        jal play_key_sound_w
         jal check_orientation     # Call helper function to determine orientation
         beq $v0, 1, respond_to_w  # If horizontal, branch to appropriate handler
         beq $v0, 2, respond_to_w_2 # If vertical, branch to appropriate handler
         j game_loop               # If neither, return to game loop
     
     check_orientation_a:
+        jal play_key_sound_a
         jal check_orientation     # Call helper function to determine orientation
         beq $v0, 1, respond_to_a_hor # If horizontal, branch to appropriate handler
         beq $v0, 2, respond_to_a_vert # If vertical, branch to appropriate handler
@@ -429,6 +451,7 @@ skip_gravity:
         j game_loop                     # If neither, return to game loop
     
     check_orientation_d:
+        jal play_key_sound_d
         jal check_orientation           # Call helper function to determine orientation
         beq $v0, 1, respond_to_d_hor    # If horizontal, branch to appropriate handler
         beq $v0, 2, respond_to_d_vert   # If vertical, branch to appropriate handler
@@ -1119,7 +1142,8 @@ skip_gravity:
         sw     $ra, 0($sp)        # save return address
         sw     $s0, 4($sp)        # save $s0
         sw     $s3, 8($sp)        # save $s3
-        sw     $t7, 12($sp)       # save $t7
+        sw     $t7, 12($sp) 
+        jal play_key_sound_four # save $t7
         move $s0, $t7
         # s0 has it's original value, used later to check 5 in a row
         li $s3, 0
@@ -1317,7 +1341,9 @@ skip_gravity:
         sw     $ra, 0($sp)        # save return address
         sw     $s0, 4($sp)      
         sw     $s3, 8($sp)      
-        sw     $t7, 12($sp)      
+        sw     $t7, 12($sp)
+        
+        jal play_key_sound_four
         
         move $s0, $t7
         #s0 has it's original value, used later to check 5 in a row
@@ -2093,4 +2119,85 @@ continue_bass:
     addi $sp, $sp, 16
     jr $ra
     
+
+play_key_sound_w:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
     
+    # MIDI play note syscall
+    li $v0, 31
+    lw $a0, key_sound_pitch_w      # Pitch
+    lw $a1, key_sound_duration   # Duration
+    lw $a2, key_sound_instrument # Instrument
+    lw $a3, key_sound_volume     # Volume
+    syscall
+    
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+    
+play_key_sound_a:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    # MIDI play note syscall
+    li $v0, 31
+    lw $a0, key_sound_pitch_a     # Pitch
+    lw $a1, key_sound_duration   # Duration
+    lw $a2, key_sound_instrument # Instrument
+    lw $a3, key_sound_volume     # Volume
+    syscall
+    
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+    
+play_key_sound_d:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    # MIDI play note syscall
+    li $v0, 31
+    lw $a0, key_sound_pitch_d    # Pitch
+    lw $a1, key_sound_duration   # Duration
+    lw $a2, key_sound_instrument # Instrument
+    lw $a3, key_sound_volume     # Volume
+    syscall
+    
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+    
+play_key_sound_four:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    # MIDI play note syscall
+    li $v0, 31
+    lw $a0, key_sound_pitch_four   # Pitch
+    lw $a1, key_sound_duration   # Duration
+    lw $a2, key_sound_instrument2 # Instrument
+    lw $a3, key_sound_volume     # Volume
+    addi $a3, $a3, 20
+    syscall
+    
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
+    
+play_key_sound_paused:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    # MIDI play note syscall
+    li $v0, 31
+    lw $a0, key_sound_pitch_four   # Pitch
+    lw $a1, key_sound_duration   # Duration
+    lw $a2, key_sound_instrument3 # Instrument
+    lw $a3, key_sound_volume     # Volume
+    addi $a3, $a3, 20
+    syscall
+    
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
