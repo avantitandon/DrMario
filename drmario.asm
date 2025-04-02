@@ -2481,6 +2481,9 @@ display_1:
     sw    $t1, 0($t5)          # draw white pixel
     addi  $t5, $t5, 256 
     
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
     sw    $t1, 0($t5)   
     jr $ra # draw white pixel
     
@@ -2507,16 +2510,22 @@ display_2:
     sw    $t1, 0($t5)          # draw white pixel
     addi  $t5, $t5, 256 
     
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
     sw    $t1, 0($t5) 
 
 
-    addi  $t5, $t5, -760
+    addi  $t5, $t5, -1016
     sw    $t1, 0($t5)          # draw white pixel
     addi  $t5, $t5, 256 
     
     sw    $t1, 0($t5)          # draw white pixel
     addi  $t5, $t5, 256 
     
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+        
     sw    $t1, 0($t5)          # draw white pixel
     addi  $t5, $t5, 256 
     
@@ -2545,9 +2554,14 @@ display_3:
     
     sw    $t1, 0($t5)          # draw white pixel
     addi  $t5, $t5, 256 
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
     
-    sw    $t1, 0($t5) 
-    addi  $t5, $t5, -760
+    sw    $t1, 0($t5)
+    
+    
+    
+    addi  $t5, $t5, -1016
     sw    $t1, 0($t5)          # draw white pixel
     addi  $t5, $t5, 256 
     
@@ -2557,9 +2571,16 @@ display_3:
     sw    $t1, 0($t5)          # draw white pixel
     addi  $t5, $t5, 256 
     
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
     sw    $t1, 0($t5)          # draw white pixel
     
-    addi  $t5, $t5, -760
+    addi  $t5, $t5, -1016
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
     sw    $t1, 0($t5)          # draw white pixel
     addi  $t5, $t5, 256 
     
