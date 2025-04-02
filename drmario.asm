@@ -83,6 +83,16 @@ key_sound_instrument2: .word 10 # music box
 key_sound_instrument3: .word 17 #organ
 
 
+level_sprite:   .asciiz "I"
+
+level_x:        .word 56    # X position (adjust as needed)
+level_y:        .word 2     # Y position (adjust as needed)
+
+
+
+
+
+
 
     
     ##############################################################################
@@ -97,6 +107,8 @@ key_sound_instrument3: .word 17 #organ
     # type 4: block with other half on top
     # type 5: block with other half to the right
     # type 6: block with other half below
+    game_state: .word 0 # initial state ie easy medium hard state
+    
     BOARD_GRID: 
         .space 3168
     pill_left_offset:  
@@ -107,6 +119,9 @@ key_sound_instrument3: .word 17 #organ
         .word 0           # counter to keep track of time for gravity
     gravity_interval: 
         .word 60         # initial amount to wait before applying gravity (approx 1 sec)
+    
+    no_of_viruses:        # original number of viruses
+       .word 4 
     
     .macro CONVERT_COLOR(%reg)
         addiu $sp, $sp, -4      # allocate stack space for $t0
@@ -139,10 +154,18 @@ key_sound_instrument3: .word 17 #organ
         jal draw_bottle
         # Draw 4 random viruses in the lower half of the board
         jal generate_draw_viruses
+        
         # Draw the first randomly colored pill
         jal draw_pill
-        # Initialize the game
+        # Initialize the music
         jal init_music
+        #initialise the level 
+        jal display_level_message
+        jal display_1
+
+        
+        
+# heres the logic, let there be initially that number of viruses, everytime 1 2 or 3 is called, we can change the speed a
         
     game_loop:
     # 1a. Check if key has been pressed
@@ -229,6 +252,9 @@ skip_gravity:
     keyboard_input:                     # A key is pressed
         lw $a0, 4($t0)                  # Load second word from keyboard
         beq $a0, 0x70, handle_pause     # pause game if p is pressed
+        beq $a0, 0x32, handle_two       #medium
+        beq $a0, 0x33, handle_three      # hard
+        # beq $a0, 0x33, handle_three
         beq $a0, 0x77, check_orientation_w
         beq $a0, 0x61, check_orientation_a
         beq $a0, 0x64, check_orientation_d
@@ -966,6 +992,7 @@ skip_gravity:
         addiu $sp, $sp, -4  
         sw $ra, 0($sp)      
         li $t5, 0             #  counter for number of viruses
+        lw $t0, no_of_viruses  # load from data
         generate_virus_loop:
         # generate random row
         li $v0, 42 # syscall number 
@@ -1014,7 +1041,7 @@ skip_gravity:
         sw $v0, 0($t6)      # draw pixel with color
         # increment counter
         addi $t5, $t5, 1      
-        blt $t5, 4, generate_virus_loop
+        blt $t5, $t0, generate_virus_loop
         # return
         lw $ra, 0($sp)      
         addiu $sp, $sp, 4   
@@ -2201,3 +2228,349 @@ play_key_sound_paused:
     lw $ra, 0($sp)
     addi $sp, $sp, 4
     jr $ra
+    
+
+
+handle_two:
+    addi $sp, $sp, -20     # Allocate 20 bytes (5 words) on the stack
+    
+    # Save registers that need to be preserved
+    sw $ra, 0($sp)         # Save return address
+    sw $s0, 4($sp)         # Save $s0
+    sw $s1, 8($sp)         # Save $s1
+    sw $s2, 12($sp)        # Save $s2
+    sw $s3, 16($sp)        # Save $s3
+    
+    li $s0, 30
+    lw $s1, gravity_interval
+    sw $s0, gravity_interval
+    
+    li $s3, 4
+    lw $s4, no_of_viruses
+    sw $s3, no_of_viruses
+    
+    lw $ra, 0($sp)         # Restore return address
+    lw $s0, 4($sp)         # Restore $s0
+    lw $s1, 8($sp)         # Restore $s1
+    lw $s2, 12($sp)        # Restore $s2
+    lw $s3, 16($sp)        # Restore $s3
+    
+    # Restore the stack pointer
+    addi $sp, $sp, 20  # Deallocate the 20 bytes
+    jal generate_draw_viruses
+    jal play_key_sound_paused
+    jal display_2
+    
+    
+    # Return to caller
+    j game_loop
+
+handle_three:
+    addi $sp, $sp, -20     # Allocate 20 bytes (5 words) on the stack
+    
+    # Save registers that need to be preserved
+    sw $ra, 0($sp)         # Save return address
+    sw $s0, 4($sp)         # Save $s0
+    sw $s1, 8($sp)         # Save $s1
+    sw $s2, 12($sp)        # Save $s2
+    sw $s3, 16($sp)        # Save $s3
+    
+    li $s0, 20
+    lw $s1, gravity_interval
+    sw $s0, gravity_interval
+    
+    li $s3, 10
+    lw $s4, no_of_viruses
+    sw $s3, no_of_viruses
+    
+    lw $ra, 0($sp)         # Restore return address
+    lw $s0, 4($sp)         # Restore $s0
+    lw $s1, 8($sp)         # Restore $s1
+    lw $s2, 12($sp)        # Restore $s2
+    lw $s3, 16($sp)        # Restore $s3
+    
+    # Restore the stack pointer
+    addi $sp, $sp, 20      # Deallocate the 20 bytes
+    jal generate_draw_viruses
+    jal play_key_sound_paused
+    jal display_3
+    
+    # Return to caller
+    j game_loop
+    
+    
+display_level_message:
+    lw    $t0, ADDR_DSPL
+    li    $t1, 0xffffff        # White color
+    li    $t7, 0x000000        # Black color (not used in this code)
+    li    $t2, 8               # startrow
+    li    $t3, 35              # startCol
+    # offset = (row*64 + col)*4 = row*256 + col*4
+    mul   $t5, $t2, 256        # row * 256
+    sll   $t6, $t3, 2          # col * 4
+    add   $t5, $t5, $t6
+    add   $t5, $t5, $t0        # add base address
+    
+    # draw row 1 of "LEVEL"
+    # L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 16         # skip to end of L
+    
+    # E
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 4          
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 4          
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 12
+    
+    
+    # V
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 16         
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 12          
+    
+    # E
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 4          
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 4          
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 16          
+    
+    # L
+    sw    $t1, 0($t5)
+    
+    # draw row 2 of "LEVEL"
+    addi  $t5, $t5, 168 
+    sw    $t1, 0($t5)
+    addi  $t5, $t5, 16         # skip to end of L
+    
+    # E
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 20 
+    
+    #V
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 16  
+    
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 12  
+    
+    # E
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 24
+    
+    #L
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 168
+    
+    #row 3 
+    sw    $t1, 0($t5)   
+    addi  $t5, $t5, 16         # skip to end of L
+    
+    # E
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 4
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 4  
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 16
+    
+    # V
+    
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 8
+    sw    $t1, 0($t5) 
+    addi  $t5, $t5, 16
+    
+    #E
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 4
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 4  
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 16
+    
+    #L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 168         # skip to end of L
+    
+    #row 4 
+    sw    $t1, 0($t5) 
+    addi  $t5, $t5, 16 
+    
+    #e
+    
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 24     
+    # v
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 8 
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 16
+    # sw    $t1, 0($t5)          
+    # addi  $t5, $t5, 12
+    
+    #e
+    sw    $t1, 0($t5)          
+    addi  $t5, $t5, 24 
+    
+    #L 
+    sw    $t1, 0($t5)
+    addi  $t5, $t5, 168 
+    
+    #last
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 4        # skip to end of L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 4        # skip to end of L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 8        # skip to end of L
+    
+    # e 
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 4        # skip to end of L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 4        # skip to end of L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 20        # skip to end of L
+    
+    #V
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 20        # skip to end of L
+    
+    #e 
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 4        # skip to end of L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 4        # skip to end of L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 16        # skip to end of L
+    
+    #l
+    
+     sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 4        # skip to end of L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 4        # skip to end of L
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 8        # skip to end of L
+    jr $ra
+    
+    
+display_1:
+    lw    $t0, ADDR_DSPL
+    li    $t1, 0xffffff        # White color
+    li    $t7, 0x000000        # Black color (not used in this code)
+    li    $t2, 15               # startrow
+    li    $t3, 44              # startCol
+    # offset = (row*64 + col)*4 = row*256 + col*4
+    mul   $t5, $t2, 256        # row * 256
+    sll   $t6, $t3, 2          # col * 4
+    add   $t5, $t5, $t6
+    add   $t5, $t5, $t0        # add base address
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)   
+    jr $ra # draw white pixel
+    
+    
+    
+display_2:
+    lw    $t0, ADDR_DSPL
+    li    $t1, 0xffffff        # White color
+    li    $t7, 0x000000        # Black color (not used in this code)
+    li    $t2, 15               # startrow
+    li    $t3, 44              # startCol
+    # offset = (row*64 + col)*4 = row*256 + col*4
+    mul   $t5, $t2, 256        # row * 256
+    sll   $t6, $t3, 2          # col * 4
+    add   $t5, $t5, $t6
+    add   $t5, $t5, $t0        # add base address
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5) 
+
+
+    addi  $t5, $t5, -760
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)
+    jr $ra # draw white pixel 
+    
+
+  
+display_3:
+    lw    $t0, ADDR_DSPL
+    li    $t1, 0xffffff        # White color
+    li    $t7, 0x000000        # Black color (not used in this code)
+    li    $t2, 15               # startrow
+    li    $t3, 44              # startCol
+    # offset = (row*64 + col)*4 = row*256 + col*4
+    mul   $t5, $t2, 256        # row * 256
+    sll   $t6, $t3, 2          # col * 4
+    add   $t5, $t5, $t6
+    add   $t5, $t5, $t0        # add base address
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5) 
+    addi  $t5, $t5, -760
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    
+    addi  $t5, $t5, -760
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    sw    $t1, 0($t5)          # draw white pixel
+    addi  $t5, $t5, 256 
+    
+    jr $ra
+    
